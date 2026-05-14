@@ -129,7 +129,7 @@ export const CourseViewer = () => {
       <main className="flex-1 min-w-0 bg-white relative">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-golive text-white rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce"
+          className="lg:hidden fixed bottom-24 right-6 w-14 h-14 bg-golive text-white rounded-2xl shadow-2xl flex items-center justify-center z-50"
         >
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>

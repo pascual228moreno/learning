@@ -48,6 +48,14 @@ create table if not exists public.comments (
 create index if not exists comments_course_session_idx
   on public.comments(course_id, session_id, created_at desc);
 
+-- One free-form notebook per user. Private, no comparison with progress
+-- or comments — just a scratchpad that follows them around the site.
+create table if not exists public.notes (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  content    text not null default '',
+  updated_at timestamptz not null default now()
+);
+
 -- ----------------------------------------------------------------------------
 -- 2) Helper: is the current user a superadmin?
 --    SECURITY DEFINER so it bypasses RLS when called from policies.
@@ -137,6 +145,7 @@ create trigger profiles_protect
 alter table public.profiles enable row level security;
 alter table public.progress enable row level security;
 alter table public.comments enable row level security;
+alter table public.notes    enable row level security;
 
 -- profiles
 drop policy if exists "profiles read self or admin" on public.profiles;
@@ -202,6 +211,27 @@ create policy "comments delete self or admin"
   on public.comments for delete
   using (auth.uid() = user_id or public.is_superadmin());
 
+-- notes — strictly private to each user. No admin override on purpose.
+drop policy if exists "notes read self" on public.notes;
+create policy "notes read self"
+  on public.notes for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "notes insert self" on public.notes;
+create policy "notes insert self"
+  on public.notes for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "notes update self" on public.notes;
+create policy "notes update self"
+  on public.notes for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "notes delete self" on public.notes;
+create policy "notes delete self"
+  on public.notes for delete
+  using (auth.uid() = user_id);
+
 -- ----------------------------------------------------------------------------
 -- 6) Realtime publications
 -- ----------------------------------------------------------------------------
@@ -209,3 +239,4 @@ create policy "comments delete self or admin"
 alter publication supabase_realtime add table public.profiles;
 alter publication supabase_realtime add table public.progress;
 alter publication supabase_realtime add table public.comments;
+-- notes deliberately NOT in realtime — single-writer per user, no need.
