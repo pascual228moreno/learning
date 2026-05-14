@@ -3,6 +3,8 @@ export interface Step {
   id: string;
   title: string;
   description: string;
+  /** Full Markdown body of the module. Rendered with react-markdown. */
+  content?: string;
   duration?: string;
   isExpanded?: boolean;
   resources?: { title: string; url: string }[];

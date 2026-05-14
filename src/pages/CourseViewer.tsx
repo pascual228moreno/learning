@@ -19,6 +19,7 @@ import { courses } from '../data';
 import { Session, Course, ProgressRow } from '../types';
 import { cn } from '../lib/utils';
 import { CommentsSection } from '../components/CommentsSection';
+import { MarkdownContent } from '../components/MarkdownContent';
 
 export const CourseViewer = () => {
   const { courseId } = useParams();
@@ -246,16 +247,27 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
                         <h4 className={cn(
                           "font-black text-lg tracking-tight",
                           isDone ? "text-slate-400 line-through" : "text-slate-900"
                         )}>{step.title}</h4>
-                        <span className="text-[10px] font-bold text-slate-400 px-2 py-0.5 bg-slate-100 rounded-md">{step.duration}</span>
+                        {step.duration && (
+                          <span className="text-[10px] font-bold text-slate-400 px-2 py-0.5 bg-slate-100 rounded-md">{step.duration}</span>
+                        )}
                       </div>
                       <p className={cn("text-sm transition-colors", isDone ? "text-slate-400" : "text-slate-500")}>
-                        {isOpen ? step.description : (step.description.substring(0, 80) + '...')}
+                        {isOpen
+                          ? step.description
+                          : (step.description.length > 80 ? step.description.substring(0, 80) + '…' : step.description)
+                        }
                       </p>
+
+                      {isOpen && step.content && (
+                        <div className="mt-6">
+                          <MarkdownContent source={step.content} />
+                        </div>
+                      )}
 
                       {isOpen && step.resources && step.resources.length > 0 && (
                         <div className="mt-6 flex flex-wrap gap-2">

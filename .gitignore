@@ -8,6 +8,9 @@ coverage/
 !.env.example
 
 # Editor / tooling
-.claude/
+# Track .claude/skills/ for project-scoped Claude Code skills, but keep
+# local settings (and any local-only conversation state) private.
+.claude/settings.local.json
+.claude/projects/
 .vscode/
 .idea/

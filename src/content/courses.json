@@ -1,0 +1,172 @@
+[
+  {
+    "id": "agentes-ia-2025",
+    "title": "Golive AI Academy — Especialista en Agentes de IA",
+    "description": "Domina la construcción de sistemas autónomos con Claude, AG2, Gemini y más.",
+    "instructor": "Golive Team",
+    "category": "Inteligencia Artificial",
+    "image": "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800",
+    "sessions": [
+      {
+        "id": 1,
+        "title": "Claude + Managed Agents I",
+        "date": "Viernes 15 mayo · 10:00–12:00",
+        "objectives": [
+          "Conocer la consola de Anthropic y diferenciar Workbench, Models, Agents, Usage y API Keys",
+          "Conectar Exa y Zapier como fuentes de herramientas para los agentes",
+          "Crear un almacén de memoria persistente para el pipeline",
+          "Crear los agentes Researcher, Archivist y Coordinator",
+          "Probar el sistema en solitario y como pipeline coordinado"
+        ],
+        "script": [
+          {
+            "id": "s1-introduccion-a-la-consola-de-anthropic",
+            "title": "Introduccion a la consola de Anthropic",
+            "description": "Conoce la diferencia entre claude.ai y la consola de Anthropic, y orientate por sus secciones principales.",
+            "content": "### Contexto\n\nClaude.ai es el producto de consumo que ya conoces. La consola de Anthropic es algo completamente distinto: es la plataforma donde se construyen y gestionan los agentes, se accede a la API y se controla el consumo. A partir de hoy vas a trabajar desde aqui.\n\n### Pasos\n\n1. Abre [console.anthropic.com](https://console.anthropic.com) en tu navegador\n2. Explora cada seccion del menu principal:\n   - **Workbench** — aqui puedes probar la API directamente, sin interfaz de chat\n   - **Models** — lista de modelos disponibles (Sonnet, Opus, Haiku) con sus diferencias de coste y capacidad\n   - **Agents** — donde viven los Managed Agents, aqui es donde vamos a trabajar\n   - **Usage** — consumo y coste en tiempo real de tu cuenta\n   - **API Keys** — claves de acceso a la API\n   - **Settings** — configuracion general\n3. Navega por cada seccion sin modificar nada todavia. Solo observa que hay en cada una.\n\n### Resultado esperado\n\nTienes una vision general de la consola y sabes donde esta cada seccion. Entiendes que la consola y claude.ai son dos entornos distintos con propositos distintos."
+          },
+          {
+            "id": "s1-configurar-el-almacen-de-credenciales",
+            "title": "Configurar el almacen de credenciales",
+            "description": "Conecta Exa y Zapier como fuentes de herramientas disponibles para tus agentes.",
+            "content": "### Contexto\n\nAntes de crear ningun agente, hay que configurar las conexiones externas. Los agentes no pueden usar herramientas que no esten disponibles en la cuenta. La consola de Anthropic tiene una seccion donde se guardan estas credenciales y conexiones, que luego podras asignar a cada agente durante su creacion.\n\n### Pasos\n\n**Conectar Exa**\n\nExa es un motor de busqueda disenado especificamente para agentes de IA. A diferencia de Google, entiende el significado de la consulta, no solo las palabras clave. Es especialmente potente para research cientifico y tecnico.\n\n1. Ve a la seccion de credenciales o conexiones de la consola\n2. Anade una nueva conexion con estos datos:\n   ```\n   Name: exa\n   Type: url\n   URL:  https://mcp.exa.ai/mcp\n   ```\n3. Guarda y verifica que aparece como activa\n\n**Conectar Zapier**\n\nZapier actua como hub centralizado de credenciales. En lugar de conectar Notion, Gmail y otras apps directamente a cada agente, las conectas una vez en Zapier y los agentes acceden a todo desde un unico punto.\n\n1. Anade una nueva conexion con estos datos:\n   ```\n   Name: zapier\n   Type: url\n   URL:  https://mcp.zapier.com/api/v1/connect\n   ```\n2. Sigue el flujo de autenticacion que Zapier solicita\n3. Autoriza el acceso y vuelve a la consola\n4. Verifica que aparece como activa\n\n### Resultado esperado\n\nExa y Zapier aparecen como conexiones disponibles en tu consola. Los agentes que crees podran usar estas herramientas."
+          },
+          {
+            "id": "s1-configurar-notion-en-zapier",
+            "title": "Configurar Notion en Zapier",
+            "description": "Activa todas las acciones de Notion disponibles en Zapier para que tus agentes puedan publicar y gestionar paginas.",
+            "content": "### Contexto\n\nZapier te permite controlar que apps y acciones expone a los agentes. Hoy solo necesitamos Notion. Gmail la dejaremos para mas adelante cuando la incorporemos al pipeline.\n\n### Pasos\n\n1. Entra en tu cuenta de Zapier\n2. Ve a la seccion de configuracion MCP o de herramientas disponibles\n3. Busca **Notion** y activa todas las acciones disponibles\n4. Guarda la configuracion\n\n### Resultado esperado\n\nTus agentes pueden usar todas las acciones de Notion disponibles en Zapier: crear paginas, anadir contenido, buscar, etc."
+          },
+          {
+            "id": "s1-crear-el-almacen-de-memoria",
+            "title": "Crear el almacen de memoria",
+            "description": "Crea el espacio donde los agentes guardaran informacion de forma persistente entre sesiones.",
+            "content": "### Contexto\n\nSin memoria persistente, cada vez que lances el pipeline los agentes empezarian desde cero. El espacio de memoria es una base de conocimiento que el Archivist va a ir llenando con los resultados del Researcher. La proxima vez que busques sobre perovskita, el sistema ya sabe lo que encontro antes.\n\n### Pasos\n\n1. Dentro de la seccion de Agents en la consola, busca la opcion para crear un almacen de memoria o knowledge store\n2. Crea uno nuevo con estos datos:\n   ```\n   Nombre:      perovskita-research\n   Descripcion: Almacen de conocimiento sobre integracion de perovskita en ceramica\n   ```\n3. Guarda y espera a que se cree\n4. Anota el ID del almacen — lo necesitaras al configurar el Archivist\n\n### Resultado esperado\n\nTienes un almacen de memoria creado y su ID anotado. Este es el espacio donde el Archivist guardara todo el conocimiento que vaya acumulando el pipeline."
+          },
+          {
+            "id": "s1-crear-el-agente-researcher",
+            "title": "Crear el agente Researcher",
+            "description": "Crea el agente que busca informacion, sintetiza resultados y publica en Notion.",
+            "content": "### Contexto\n\nEl Researcher es el agente que hace el trabajo de campo. Recibe una pregunta, busca informacion con Exa, genera un informe estructurado y lo publica en Notion via Zapier. Es el agente mas complejo del sistema porque tiene acceso a herramientas externas.\n\n### Pasos\n\n1. Ve a la seccion de Agents y crea un nuevo agente\n2. Rellena los campos basicos:\n   ```\n   Name:        Perovskite Researcher\n   Model:       claude-sonnet-4-6\n   Speed:       standard\n   Description: Investigador tecnico para integracion de celdas solares en ceramica\n   ```\n3. En el campo de instrucciones del sistema, pega el siguiente texto:\n\n```\nEres un agente investigador especializado en materiales fotovoltaicos y ceramica.\nTu mision es investigar la viabilidad de integrar celdas de perovskita en sustratos ceramicos.\n\nCuando recibas una tarea:\n1. Busca informacion tecnica, comercial y de mercado usando las herramientas disponibles.\n2. Prioriza fuentes academicas y tecnicas sobre blogs o redes sociales.\n3. Genera un informe estructurado con:\n   - Resumen ejecutivo\n   - Estado del arte tecnico\n   - Players comerciales relevantes\n   - Estimacion de costes\n   - Riesgos principales\n4. Publica el informe en Notion usando Zapier.\n5. Si encuentras errores durante la ejecucion, reportalos al final de tu respuesta.\n```\n\n4. Cuando la consola te pregunte que herramientas necesita el agente, selecciona:\n   - Conexion a **exa**\n   - Conexion a **zapier**\n   - Activa el agent toolset (necesario para que pueda ser coordinado)\n5. Guarda el agente\n6. Anota el ID del agente Researcher\n\n### YAML de referencia — version base\n\nEste es el YAML que representa el agente que acabas de crear:\n\n```yaml\nname: Perovskite Researcher\nmodel:\n  id: claude-sonnet-4-6\n  speed: standard\ndescription: Investigador tecnico para integracion de celdas solares en ceramica\nsystem: |-\n  Eres un agente investigador especializado en materiales fotovoltaicos y ceramica.\n  Tu mision es investigar la viabilidad de integrar celdas de perovskita en sustratos ceramicos.\n\n  Cuando recibas una tarea:\n  1. Busca informacion tecnica, comercial y de mercado usando las herramientas disponibles.\n  2. Prioriza fuentes academicas y tecnicas sobre blogs o redes sociales.\n  3. Genera un informe estructurado con:\n     - Resumen ejecutivo\n     - Estado del arte tecnico\n     - Players comerciales relevantes\n     - Estimacion de costes\n     - Riesgos principales\n  4. Publica el informe en Notion usando Zapier.\n  5. Si encuentras errores durante la ejecucion, reportalos al final de tu respuesta.\nmcp_servers:\n  - name: exa\n    type: url\n    url: https://mcp.exa.ai/mcp\n  - name: zapier\n    type: url\n    url: https://mcp.zapier.com/api/v1/connect\ntools:\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    type: agent_toolset_20260401\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: exa\n    type: mcp_toolset\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: zapier\n    type: mcp_toolset\nskills: []\nmetadata:\n  template: deep-research\n```\n\n### YAML de referencia — version definitiva\n\nEsta es la version evolucionada del mismo agente, con instrucciones operativas especificas que evitan los errores mas comunes con Zapier y Notion. Usala como referencia para entender hacia donde puede llegar el refinamiento de un agente:\n\n```yaml\nname: Euroarce Perovskita Researcher\nmodel:\n  id: claude-sonnet-4-6\n  speed: standard\ndescription: Investigador tecnico para integracion de celdas solares en ceramica.\nsystem: |-\n  Eres el Agente Coordinador de I+D para Samca Euroarce. Tu mision es evaluar la viabilidad de integrar celdas de perovskita en sustratos ceramicos.\n\n  Sigue este flujo estricto:\n\n  1. Descompón el tema en:\n     - Estado del arte tecnico: eficiencia real de celdas de perovskita sobre ceramica, estabilidad termica y quimica documentada en literatura cientifica.\n     - Analisis de patentes activas: titulares, fechas de expiracion, libertad de operacion.\n     - Players comerciales: empresas que ya fabrican o estan cerca de comercializar perovskita-ceramica.\n     - Estimacion de costes de materiales: precursores de perovskita, sustratos ceramicos, procesos de deposicion.\n\n  2. Filtro de fuentes: Prioriza Google Scholar, repositorios de patentes (Espacenet, USPTO, Google Patents) y publicaciones de ingenieria (IEEE, ACS, Nature Energy). Ignora blogs comerciales, redes sociales y fuentes sin revision por pares.\n\n  3. Ejecuta busquedas especificas y paralelas usando las herramientas disponibles (Exa para busqueda semantica avanzada, web_search y web_fetch para fuentes directas). Extrae datos concretos: porcentajes de eficiencia, temperaturas de proceso, vida util en horas/ciclos, costes en euros/m2.\n\n  4. Genera un informe estructurado que incluya:\n     - Resumen ejecutivo con hallazgos clave\n     - Estado del arte tecnico (con datos cuantitativos)\n     - Panorama de patentes (activas, expiradas, oportunidades)\n     - Competencia y players comerciales\n     - Estimacion de costes de materiales\n     - Riesgos de Implementacion (tecnicos, regulatorios, de mercado)\n     - Brechas de conocimiento y confianza en las fuentes\n\n  5. Al finalizar el informe, publica en Notion via Zapier siguiendo estas instrucciones operativas:\n\n  ### Descubrimiento del workspace\n  ANTES de crear cualquier pagina en Notion:\n  1. Ejecuta list_enabled_zapier_actions con app=\"Notion\" para ver las acciones disponibles.\n  2. Ejecuta page_by_title con exact_match=\"no\" y title=\"a\" para descubrir TODAS las paginas compartidas con la integracion.\n  3. Anota el ID y titulo de la pagina que usaras como parent_page.\n  4. NO asumas que existen paginas llamadas \"Research\", \"Home\" o \"Projects\" — solo usa paginas que hayas confirmado con la busqueda.\n\n  ### Formato del contenido\n  - NO uses tablas markdown (sintaxis |---|). Notion/Zapier no las parsea correctamente y genera errores de validacion.\n  - Usa listas con guiones (-) o texto plano en su lugar.\n  - NO uses caracteres especiales ni acentos en el contenido si puedes evitarlo.\n\n  ### Limite de bloques por pagina\n  - Notion permite maximo 100 bloques por llamada create_page.\n  - Un parrafo, un item de lista o una linea en blanco cuenta como 1 bloque.\n  - Si tu contenido tiene mas de 70 parrafos/items, DIVIDE la publicacion:\n    1. Crea la pagina con titulo y resumen ejecutivo (max. 60 bloques).\n    2. Usa la accion page_content para anadir secciones adicionales en llamadas separadas.\n\n  ### Evitar follow-up questions de Zapier\n  - Siempre pasa TODOS los parametros explicitamente: title, content, parent_page, icon, cover=\"\".\n  - Si Zapier pide confirmacion, repite la llamada con los mismos parametros.\n\n  ### Reporte de incidencias\n  Si tuviste errores o necesitaste multiples intentos con alguna herramienta MCP, reportalo SIEMPRE al final de tu respuesta con este formato:\n\n  ### Incidencias de ejecucion\n  - Herramienta: [nombre de la herramienta]\n  - Intentos: [numero total]\n  - Error: [mensaje de error resumido]\n  - Solucion: [que funciono finalmente]\n  - Regla sugerida: [instruccion concreta para evitarlo en el futuro]\n\n  Se esceptico. Si las fuentes son contradictorias, indicalo y explica cual es mas creible y por que. No disimules la incertidumbre con prosa confiada.\nmcp_servers:\n  - name: exa\n    type: url\n    url: https://mcp.exa.ai/mcp\n  - name: zapier\n    type: url\n    url: https://mcp.zapier.com/api/v1/connect\ntools:\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    type: agent_toolset_20260401\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: exa\n    type: mcp_toolset\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: zapier\n    type: mcp_toolset\nskills: []\nmetadata:\n  template: deep-research\n```\n\n### Resultado esperado\n\nEl agente Researcher esta creado con acceso a Exa y Zapier. Tienes su ID anotado. Entiendes la diferencia entre la version base que has creado y la version definitiva de referencia."
+          },
+          {
+            "id": "s1-probar-el-researcher-en-solitario",
+            "title": "Probar el Researcher en solitario",
+            "description": "Lanza el Researcher con una consulta real y observa como trabaja antes de conectarlo con los otros agentes.",
+            "content": "### Contexto\n\nAntes de conectar los tres agentes entre si, vale la pena ver como funciona el Researcher de forma independiente. Asi entiendes que hace exactamente y puedes detectar si algo no funciona antes de complicar el sistema.\n\n### Pasos\n\n1. Abre el agente Researcher que acabas de crear\n2. Inicia una nueva sesion\n3. Escribe la consulta de prueba que encontraras en los materiales de esta sesion\n4. Observa el proceso mientras trabaja:\n   - Usa Exa para buscar informacion?\n   - Genera el informe con las secciones definidas?\n   - Intenta publicar en Notion via Zapier?\n   - Reporta alguna incidencia al final?\n5. Si hay errores con Zapier o Notion, toma nota de que ha fallado\n\n### Resultado esperado\n\nHas visto al Researcher trabajar en solitario. Si hay errores, los tienes anotados. Si todo funciona, tienes un primer informe publicado en Notion.\n\nEs normal que el primer intento tenga algun error con Zapier o Notion. Los system prompts se refinan con la experiencia real. La version definitiva del YAML del modulo anterior tiene instrucciones especificas para evitar los errores mas comunes."
+          },
+          {
+            "id": "s1-crear-el-agente-archivist",
+            "title": "Crear el agente Archivist",
+            "description": "Crea el agente que organiza y guarda en memoria todo lo que encuentra el Researcher.",
+            "content": "### Contexto\n\nEl Archivist no busca ni investiga. Su unico trabajo es recibir informacion del Researcher o del Coordinator y guardarla de forma organizada en el almacen de memoria. Es el agente que construye el conocimiento acumulado del sistema a lo largo del tiempo.\n\n### Pasos\n\n1. Ve a la seccion de Agents y crea un nuevo agente\n2. Rellena los campos basicos:\n   ```\n   Name:        Memory Archivist\n   Model:       claude-sonnet-4-6\n   Speed:       standard\n   Description: Agente archivista que organiza y guarda informacion en memoria persistente\n   ```\n3. En el campo de instrucciones del sistema, pega el siguiente texto:\n\n```\nEres un agente archivista. Tu funcion es recibir informacion del investigador\no del coordinador y guardarla de forma organizada en los almacenes de memoria disponibles.\n\nCuando recibas informacion:\n1. Identifica de que tipo es: investigacion tecnica, datos comerciales, lecciones operativas, etc.\n2. Guardala en la ruta apropiada del almacen de memoria.\n3. Si ya existe informacion similar, actualiza en lugar de duplicar.\n4. Confirma que has guardado y en que ruta.\n\nOrganizacion basica del almacen:\n- /perovskitas/tecnico/    — informacion tecnica y cientifica\n- /perovskitas/comercial/  — players, mercado, costes\n- /operativo/              — errores, lecciones y soluciones de herramientas\n\nNo realizas busquedas propias. Solo archivas lo que recibes.\n```\n\n4. Cuando la consola te pregunte que herramientas necesita el agente:\n   - Conecta el almacen de memoria **perovskita-research** que creaste antes\n   - Activa el agent toolset\n   - No anadis conexiones a Exa ni a Zapier — el Archivist no necesita acceso a internet\n5. Guarda el agente\n6. Anota el ID del agente Archivist\n\n### YAML de referencia — version base\n\n```yaml\nname: Memory Archivist\nmodel:\n  id: claude-sonnet-4-6\n  speed: standard\ndescription: Agente archivista que organiza y guarda informacion en memoria persistente.\nsystem: |-\n  Eres un agente archivista. Tu funcion es recibir informacion del investigador\n  o del coordinador y guardarla de forma organizada en los almacenes de memoria disponibles.\n\n  Cuando recibas informacion:\n  1. Identifica de que tipo es: investigacion tecnica, datos comerciales, lecciones operativas, etc.\n  2. Guardala en la ruta apropiada del almacen de memoria.\n  3. Si ya existe informacion similar, actualiza en lugar de duplicar.\n  4. Confirma que has guardado y en que ruta.\n\n  Organizacion basica del almacen:\n  - /perovskitas/tecnico/    — informacion tecnica y cientifica\n  - /perovskitas/comercial/  — players, mercado, costes\n  - /operativo/              — errores, lecciones y soluciones de herramientas\n\n  No realizas busquedas propias. Solo archivas lo que recibes.\nmcp_servers: []\ntools:\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    type: agent_toolset_20260401\nskills: []\nmetadata: {}\n```\n\n### YAML de referencia — version definitiva\n\n```yaml\nname: Memory Archivist Agent\nmodel:\n  id: claude-sonnet-4-6\n  speed: standard\ndescription: Agente especializado en guardar, organizar y recuperar informacion sobre perovskitas y lecciones operativas en almacenes de memoria persistentes, a partir de las respuestas de un agente investigador o coordinador.\nsystem: |-\n  Eres un agente archivista especializado en perovskitas y en la gestion de lecciones operativas. Tu funcion es recibir informacion del agente investigador o del coordinador y almacenarla de forma estructurada en los almacenes de memoria disponibles.\n\n  ---\n\n  ## 1. ARCHIVADO DE INFORMACION SOBRE PEROVSKITAS\n\n  Como procesar la informacion recibida:\n  1. Analiza el contenido e identifica su categoria (tipo de perovskita, propiedades fisicas/quimicas, aplicaciones, metodos de sintesis, resultados experimentales, referencias bibliograficas, etc.).\n  2. Antes de guardar, verifica si ya existe informacion similar o duplicada en el almacen de memoria revisando las entradas existentes.\n  3. Si no hay duplicado, guarda la informacion de forma estructurada en la ruta apropiada (por ejemplo: /perovskitas/categoria/subcategoria.md).\n  4. Si ya existe informacion similar, actualiza la entrada existente integrando los nuevos datos sin perder los anteriores.\n  5. Confirma al usuario que se guardo, en que ruta y si fue una entrada nueva o una actualizacion.\n\n  Organizacion del almacen — perovskitas:\n  - /perovskitas/tipos/ — Clasificacion por tipo de perovskita (haluro, oxido, hibrida, etc.)\n  - /perovskitas/propiedades/ — Propiedades fisicas, opticas, electricas, de estabilidad, etc.\n  - /perovskitas/aplicaciones/ — Celdas solares, LEDs, detectores, etc.\n  - /perovskitas/sintesis/ — Metodos y protocolos de fabricacion\n  - /perovskitas/resultados/ — Datos experimentales y hallazgos\n  - /perovskitas/referencias/ — Fuentes, articulos y publicaciones\n\n  ---\n\n  ## 2. ARCHIVADO DE LECCIONES OPERATIVAS\n\n  Cuando recibas un mensaje del coordinador con lecciones operativas sobre errores en herramientas (Zapier, Notion, Exa, etc.), debes guardarlas en la ruta /operativo/ del almacen de memoria.\n\n  Rutas operativas:\n  - /operativo/zapier_notion.md — Especifico de publicacion en Notion via Zapier\n  - /operativo/lecciones_ejecucion.md — Errores y soluciones generales de cualquier otra herramienta\n\n  Criterio de routing:\n  - Si la leccion involucra Zapier y Notion (publicacion, webhooks, formato de pagina) — /operativo/zapier_notion.md\n  - Para cualquier otra herramienta o error general — /operativo/lecciones_ejecucion.md\n\n  Proceso antes de guardar:\n  1. Revisa el fichero de destino para verificar si ya existe una leccion similar.\n  2. Si existe, actualiza la entrada existente anadiendo fecha y contexto adicional, sin duplicar.\n  3. Si no existe, crea una nueva entrada siguiendo el formato exacto.\n\n  Formato obligatorio de cada leccion:\n  ## [Herramienta] — [Fecha]\n  - Error: [descripcion del error]\n  - Causa: [por que fallo]\n  - Solucion: [que funciono]\n  - Regla: [instruccion concreta reutilizable para la proxima vez]\n\n  Confirmacion al coordinador:\n  Cuando termines de procesar lecciones operativas, confirma:\n  - Que fichero(s) has actualizado\n  - Cuantas lecciones has anadido (nuevas) y cuantas has modificado (actualizadas)\n\n  ---\n\n  ## PRINCIPIOS GENERALES\n\n  - No realizas busquedas ni investigaciones propias; solo archivas lo que recibes.\n  - Mantén la informacion concisa, bien estructurada y en el idioma en que fue recibida.\n  - Ante consultas de recuperacion, busca en el almacen y sintetiza la informacion relevante de forma clara.\n  - Siempre confirma las acciones realizadas: ruta, tipo de operacion (nueva entrada / actualizacion) y resumen del contenido guardado.\nmcp_servers: []\ntools:\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    type: agent_toolset_20260401\nskills: []\nmetadata: {}\n```\n\n### Resultado esperado\n\nEl agente Archivist esta creado con acceso al almacen de memoria pero sin acceso a internet. Tienes su ID anotado."
+          },
+          {
+            "id": "s1-crear-el-agente-coordinator",
+            "title": "Crear el agente Coordinator",
+            "description": "Crea el agente que dirige al Researcher y al Archivist, valida resultados y gestiona los errores.",
+            "content": "### Contexto\n\nEl Coordinator es el cerebro del sistema. No hace trabajo de campo ni archiva: su trabajo es dirigir a los otros dos agentes, verificar que hacen su trabajo correctamente y aprender de los errores para mejorar el pipeline. Por eso usa Opus, el modelo mas potente, mientras los otros usan Sonnet.\n\n### Pasos\n\n1. Ve a la seccion de Agents y crea un nuevo agente\n2. Rellena los campos basicos:\n   ```\n   Name:        Perovskite Research Coordinator\n   Model:       claude-opus-4-7\n   Speed:       standard\n   Description: Coordinator agent that orchestrates the perovskite research pipeline\n   ```\n3. En el campo de instrucciones del sistema, pega el siguiente texto:\n\n```\nEres un agente coordinador que gestiona un pipeline de investigacion sobre perovskitas.\n\nTu trabajo es:\n1. Delegar la tarea de investigacion al agente Researcher.\n2. Verificar que el Researcher ha completado su trabajo correctamente.\n3. Pasar el contenido al agente Archivist para que lo organice en memoria.\n4. Si algun paso falla, reportarlo claramente e intentarlo de nuevo si procede.\n5. Si el Researcher reporta incidencias de ejecucion, pasarselas tambien al Archivist\n   para que las guarde como lecciones operativas.\n```\n\n4. Cuando la consola te pregunte que herramientas necesita el agente:\n   - Conecta **exa**\n   - Conecta **zapier**\n   - Activa el agent toolset\n\n   Aunque el Coordinator no va a usar Exa ni Zapier directamente, necesita tenerlos asociados. Esta es una limitacion actual de la plataforma: los servidores MCP deben estar en el Coordinator para que los subagentes puedan usarlos.\n\n5. Guarda el agente\n6. Anota el ID del agente Coordinator\n\n### IDs que necesitas tener anotados antes de continuar\n\n| Agente o recurso   | ID |\n|--------------------|----|\n| Researcher         |    |\n| Archivist          |    |\n| Coordinator        |    |\n| Almacen de memoria |    |\n\n### YAML de referencia — version base\n\n```yaml\nname: Perovskite Research Coordinator\nmodel:\n  id: claude-opus-4-7\n  speed: standard\ndescription: Coordinator agent that orchestrates the perovskite research pipeline.\nsystem: |-\n  Eres un agente coordinador que gestiona un pipeline de investigacion sobre perovskitas.\n\n  Tu trabajo es:\n  1. Delegar la tarea de investigacion al agente Researcher.\n  2. Verificar que el Researcher ha completado su trabajo correctamente.\n  3. Pasar el contenido al agente Archivist para que lo organice en memoria.\n  4. Si algun paso falla, reportarlo claramente e intentarlo de nuevo si procede.\n  5. Si el Researcher reporta incidencias de ejecucion, pasarselas tambien al Archivist\n     para que las guarde como lecciones operativas.\nmcp_servers:\n  - name: exa\n    type: url\n    url: https://mcp.exa.ai/mcp\n  - name: zapier\n    type: url\n    url: https://mcp.zapier.com/api/v1/connect\ntools:\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    type: agent_toolset_20260401\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: exa\n    type: mcp_toolset\n  - configs: []\n    default_config:\n      enabled: true\n      permission_policy:\n        type: always_allow\n    mcp_server_name: zapier\n    type: mcp_toolset\nskills: []\nmetadata:\n  pipeline: perovskite-research\n  role: coordinator\n```\n\n### Resultado esperado\n\nLos tres agentes estan creados y tienes los cuatro IDs anotados. El sistema esta listo para probarse, aunque todavia falta un paso clave para que funcione como orquestador."
+          },
+          {
+            "id": "s1-lanzar-el-coordinator-y-observar-el-fallo",
+            "title": "Lanzar el Coordinator y observar el fallo",
+            "description": "Prueba el Coordinator tal como esta y observa por que no puede coordinar a los otros agentes todavia.",
+            "content": "### Contexto\n\nEn Managed Agents, para que un agente actue como orquestador de otros agentes hay que configurarlo explicitamente mediante la API. La interfaz visual no permite hacer esto todavia. Este modulo muestra ese limite de forma practica.\n\n### Pasos\n\n1. Abre el agente Coordinator\n2. Inicia una nueva sesion\n3. Escribe la consulta de prueba que encontraras en los materiales de esta sesion\n4. Observa que pasa:\n   - El Coordinator delega al Researcher?\n   - O responde como si fuera un agente individual?\n5. Toma nota de lo que ocurre\n\n### Resultado esperado\n\nEl Coordinator responde pero no delega en los otros agentes. Actua como un agente individual, no como un orquestador. Este es el comportamiento esperado en este punto. En el modulo siguiente lo resolveís."
+          },
+          {
+            "id": "s1-ejecutar-el-script-python-y-relanzar",
+            "title": "Ejecutar el script Python y relanzar",
+            "description": "Configura el Coordinator como orquestador real ejecutando un script y comprueba que el sistema funciona.",
+            "content": "### Contexto\n\nPara designar a un agente como Coordinator de otros en Managed Agents, hay que usar la API directamente. El siguiente script hace exactamente eso: le dice a Anthropic que el Coordinator es un orquestador y le pasa los IDs de los agentes que coordina. No hace falta entender cada linea de codigo — solo sustituir los valores y ejecutarlo.\n\n### Pasos\n\n1. Abre un editor de texto y crea un archivo llamado `coordinator_setup.py`\n2. Copia el siguiente codigo y sustituye los valores entre corchetes por los IDs que anotaste:\n\n```python\nimport anthropic\n\nclient = anthropic.Anthropic(api_key=\"[TU_API_KEY]\")\n\n# Recuperar la version actual del agente\nagent = client.beta.agents.retrieve(\"[ID_DEL_COORDINATOR]\")\nprint(f\"Version actual: {agent.version}\")\n\n# Configurar el Coordinator como orquestador\nclient.beta.agents.update(\n    \"[ID_DEL_COORDINATOR]\",\n    version=agent.version,\n    name=\"Perovskite Research Coordinator\",\n    model={\"id\": \"claude-opus-4-7\", \"speed\": \"standard\"},\n    tools=[\n        {\n            \"type\": \"agent_toolset_20260401\",\n            \"default_config\": {\n                \"enabled\": True,\n                \"permission_policy\": {\"type\": \"always_allow\"}\n            }\n        }\n    ],\n    multiagent={\n        \"type\": \"coordinator\",\n        \"agents\": [\n            \"[ID_DEL_RESEARCHER]\",\n            \"[ID_DEL_ARCHIVIST]\"\n        ]\n    }\n)\n\nprint(\"Coordinator configurado!\")\n```\n\n3. Abre una terminal y ejecuta:\n   ```\n   python coordinator_setup.py\n   ```\n4. Verifica que aparece el mensaje `Coordinator configurado!`\n5. Vuelve a la consola y abre el agente Coordinator\n6. Lanza de nuevo la misma consulta del modulo anterior\n7. Observa la diferencia:\n   - El Coordinator ahora delega al Researcher?\n   - Espera el resultado y lo pasa al Archivist?\n   - El Archivist guarda la informacion en el almacen de memoria?\n\n### Resultado esperado\n\nEl sistema funciona como un equipo coordinado. El Coordinator dirige, el Researcher investiga y publica en Notion, el Archivist guarda en memoria. Acabas de construir tu primer pipeline multi-agente.\n\nLo que has visto en este modulo — el fallo y la solucion con el script — ilustra el limite actual de las interfaces visuales frente al control total que da el codigo. En la Sesion 3 veras como AG2 resuelve esta misma arquitectura de forma nativa, sin necesitar ningun script adicional."
+          }
+        ],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 2,
+        "title": "Claude Managed Agents e inicio AG2",
+        "date": "Martes 19 mayo",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 3,
+        "title": "AG2 Framework",
+        "date": "Viernes 22 mayo",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 4,
+        "title": "ChatGPT Workspace Agents",
+        "date": "Martes 26 mayo",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 5,
+        "title": "Google Gemini Enterprise Agents",
+        "date": "Viernes 5 junio",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 6,
+        "title": "Claude Design",
+        "date": "Martes 9 junio",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 7,
+        "title": "Cowork, OpenClaw y conexión con apps",
+        "date": "Viernes 12 junio",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      },
+      {
+        "id": 8,
+        "title": "Comparativa, costes y cierre",
+        "date": "Martes 16 junio",
+        "objectives": [],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      }
+    ]
+  },
+  {
+    "id": "prompt-engineering-avanzado",
+    "title": "Mastering Prompt Engineering",
+    "description": "Técnicas avanzadas de prompting para modelos de lenguaje de gran escala.",
+    "instructor": "Golive Team",
+    "category": "Productividad",
+    "image": "https://images.unsplash.com/photo-1620712943543-bcc4628c9759?auto=format&fit=crop&q=80&w=800",
+    "sessions": [
+      {
+        "id": 1,
+        "title": "Fundamentos y Zero-shot",
+        "date": "Lunes 1 de Junio",
+        "objectives": [
+          "Bases del prompting"
+        ],
+        "script": [],
+        "exercises": [],
+        "takeaways": []
+      }
+    ]
+  }
+]

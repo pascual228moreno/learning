@@ -27,30 +27,48 @@ Sin tests automatizados todavía.
 src/
 ├── App.tsx                    # Router + AuthProvider; mínimo
 ├── main.tsx                   # Entry point (StrictMode)
-├── data.ts                    # FUENTE DE CONTENIDO: cursos, sesiones, pasos, ejercicios
+├── data.ts                    # Re-exporta el JSON generado a src/content/
 ├── types.ts                   # Tipos compartidos (Course, Session, Step, UserProfile, ...)
-├── index.css                  # Tailwind + tema Golive
+├── index.css                  # Tailwind + tema Golive + estilos .markdown-content
 ├── vite-env.d.ts              # Tipos de import.meta.env
+├── content/
+│   └── courses.json           # GENERADO por scripts/build-content.ts — no editar a mano
 ├── lib/
 │   ├── supabase.ts            # Cliente Supabase + helper cliente aislado
 │   ├── utils.ts               # cn() (clsx + tailwind-merge)
-│   └── admin-actions.ts       # createUser, updateUserCourses, generatePassword
+│   └── admin-actions.ts       # createUser, updateUserCourses, setUserPassword, generatePassword
 ├── contexts/
 │   └── AuthContext.tsx        # Sesión Supabase + perfil + suscripción realtime
 ├── components/
 │   ├── Navigation.tsx
 │   ├── LogoutConfirmModal.tsx
-│   └── CommentsSection.tsx
+│   ├── CommentsSection.tsx
+│   └── MarkdownContent.tsx    # Render de contenido Markdown de los módulos
 └── pages/
     ├── Landing.tsx            # /
-    ├── Login.tsx              # /login — email/password + botón Google (deshabilitado por ahora)
+    ├── Login.tsx              # /login — email/password (Google botón deshabilitado)
     ├── Portal.tsx             # /portal — lista cursos asignados
     ├── CourseViewer.tsx       # /course/:id — sesiones, pasos, progreso
-    ├── Admin.tsx              # /admin — crear usuarios, asignar cursos (solo superadmin)
+    ├── Admin.tsx              # /admin — crear usuarios, asignar cursos, cambiar pwd
+    ├── ChangePassword.tsx     # /account/password — self-service
     └── NoAccess.tsx           # /no-access — pantalla de bloqueo
 
+content/                       # FUENTE de cursos en Markdown — ver content/CONTENT_GUIDE.md
+├── CONTENT_GUIDE.md
+└── <course-id>/
+    ├── _course.md
+    └── sesion-<id>-<slug>.md
+
+scripts/
+└── build-content.ts           # Parser .md → src/content/courses.json
+
 supabase/
-└── schema.sql                 # Tablas + triggers + RLS — referencia, ya está aplicado en el proyecto
+├── schema.sql                 # Tablas + triggers + RLS — referencia, ya aplicado al proyecto
+└── functions/
+    └── admin-set-password/    # Edge Function (Deno) para cambiar passwords desde /admin
+
+.claude/skills/
+└── content/SKILL.md           # Skill /content para validar y desplegar contenido nuevo
 ```
 
 ## Modelo de datos en Supabase
@@ -71,36 +89,33 @@ Snake_case en DB y en TS, sin capa de mapeo.
 
 ## Cómo añadir un curso o sesión nuevos (contenido)
 
-**Modelo actual**: contenido estático en `src/data.ts` (typed por `Course[]` de `types.ts`). Para añadir contenido:
+**Modelo actual**: el contenido vive en `content/` como Markdown. Un script lo parsea y `src/data.ts` lo importa.
 
-1. Abrir `src/data.ts`
-2. Añadir un objeto al array `courses`:
-   ```ts
-   {
-     id: 'curso-id-unico',          // usado en URLs y en course_ids del perfil
-     title: '...',
-     description: '...',
-     instructor: 'Golive Team',
-     category: '...',
-     image: 'https://...',
-     sessions: [
-       {
-         id: 1,
-         title: '...',
-         date: 'Viernes 15 mayo',
-         objectives: [...],
-         script: [
-           { id: 's1-1', title: '...', duration: '30 min', description: '...', resources: [...] }
-         ],
-         exercises: [...],
-         takeaways: [...]
-       }
-     ]
-   }
-   ```
-3. Asignar acceso al curso desde `/admin` (`course_ids` del perfil de cada alumno).
+```
+content/
+├── CONTENT_GUIDE.md                 ← guía completa de formato
+├── <course-id>/
+│   ├── _course.md                   ← frontmatter del curso (title, instructor, image…)
+│   └── sesion-<id>-<slug>.md        ← una sesión = un archivo
+```
 
-**A futuro** (no implementado): migrar a un sistema de archivos Markdown en `content/`, parseados por un script que regenere `data.ts` (o se sirva on-demand desde Supabase Storage). Diseño pendiente.
+**Flujo:**
+1. Crea/edita el `.md` que toque dentro de `content/` (sintaxis en `content/CONTENT_GUIDE.md`)
+2. `npm run build:content` regenera `src/content/courses.json`
+3. `npm run dev` para verificar visualmente
+4. Commit + push → Vercel desplega (el `npm run build` ya ejecuta `build:content` por dentro, así que producción nunca se queda con JSON viejo)
+
+**O usa la skill**: si trabajas con Claude Code en este repo, invoca `/content` y se encarga de validar, parsear, lint y proponer commit. La skill vive en `.claude/skills/content/SKILL.md`.
+
+**No edites NUNCA** `src/content/courses.json` ni `src/data.ts` para añadir contenido. Son archivos generados / wrappers, no fuentes.
+
+### IDs de módulos y progreso
+
+El parser deriva el ID de cada módulo como `s<sessionId>-<slug-del-titulo>` (ej. `s1-introduccion-a-la-consola-de-anthropic`). Renombrar el título cambia el slug → el progreso del usuario para ese módulo se queda huérfano en Supabase (no rompe nada, pero el alumno tiene que volver a marcarlo). Renombra solo cuando reescribas significativamente el módulo.
+
+### Renderizado en la UI
+
+Cuando un step tiene `content` (Markdown), `CourseViewer` lo renderiza vía `MarkdownContent` (`react-markdown` + `remark-gfm`). Estilos en `src/index.css` bajo `.markdown-content`. Sin syntax highlighting todavía (los bloques de código se ven monoespaciados sobre fondo oscuro pero sin colores por lenguaje).
 
 ## Variables de entorno
 
