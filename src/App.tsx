@@ -2,8 +2,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import { Navigation } from './components/Navigation';
 import { Landing } from './pages/Landing';
+import { Login } from './pages/Login';
 import { Portal } from './pages/Portal';
 import { CourseViewer } from './pages/CourseViewer';
+import { Admin } from './pages/Admin';
+import { NoAccess } from './pages/NoAccess';
 
 export default function App() {
   return (
@@ -13,8 +16,11 @@ export default function App() {
           <Navigation />
           <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/portal" element={<Portal />} />
             <Route path="/course/:courseId" element={<CourseViewer />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/no-access" element={<NoAccess />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>

@@ -21,4 +21,7 @@
   .card {
     @apply border border-slate-200 rounded-xl p-6 bg-white shadow-sm;
   }
+  .input {
+    @apply w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:bg-white focus:border-golive/30 focus:outline-none text-sm;
+  }
 }

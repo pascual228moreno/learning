@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, ShieldCheck, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
 
 export const Navigation = () => {
-  const { user, login, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const isSuperadmin = profile?.role === 'superadmin';
 
   return (
     <>
@@ -20,13 +21,24 @@ export const Navigation = () => {
           <div className="flex items-center gap-4">
             {user ? (
               <div className="flex items-center gap-3">
-                <Link to="/portal" className="text-sm font-semibold text-slate-600 hover:text-golive transition-colors mr-2">Mis Cursos</Link>
-                <div className="relative group">
-                  <img src={user.photoURL || ""} alt="Avatar" className="w-8 h-8 rounded-full border-2 border-golive/20 cursor-pointer" />
+                <Link to="/portal" className="text-sm font-semibold text-slate-600 hover:text-golive transition-colors">Mis Cursos</Link>
+                {isSuperadmin && (
+                  <Link to="/admin" className="text-sm font-semibold text-golive hover:text-golive-hover transition-colors flex items-center gap-1">
+                    <ShieldCheck size={14} /> Admin
+                  </Link>
+                )}
+                <div className="relative group ml-2">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full border-2 border-golive/20 cursor-pointer" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full border-2 border-golive/20 bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold cursor-pointer">
+                      {(profile?.displayName || user.email || '?')[0]?.toUpperCase()}
+                    </div>
+                  )}
                   <div className="absolute right-0 top-full pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                    <div className="bg-white border border-slate-100 shadow-xl rounded-xl p-2 min-w-[200px]">
+                    <div className="bg-white border border-slate-100 shadow-xl rounded-xl p-2 min-w-[220px]">
                       <div className="px-3 py-2 border-b border-slate-50 mb-1">
-                        <p className="text-xs font-bold text-slate-900 truncate">{user.displayName}</p>
+                        <p className="text-xs font-bold text-slate-900 truncate">{profile?.displayName || user.displayName || '—'}</p>
                         <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                       </div>
                       <button
@@ -40,9 +52,9 @@ export const Navigation = () => {
                 </div>
               </div>
             ) : (
-              <button onClick={login} className="btn-primary flex items-center gap-2 text-sm">
+              <Link to="/login" className="btn-primary flex items-center gap-2 text-sm">
                 <UserIcon size={16} /> Acceder
-              </button>
+              </Link>
             )}
           </div>
         </div>

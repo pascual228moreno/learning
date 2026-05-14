@@ -33,7 +33,7 @@ import { CommentsSection } from '../components/CommentsSection';
 export const CourseViewer = () => {
   const { courseId } = useParams();
   const course = courses.find(c => c.id === courseId);
-  const { user } = useAuth();
+  const { user, profile, loading, resolvingAccess, noAccess } = useAuth();
   const [selectedSessionId, setSelectedSessionId] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -49,7 +49,16 @@ export const CourseViewer = () => {
     });
   }, [user, courseId]);
 
-  if (!course) return <Navigate to="/portal" />;
+  if (loading) return <div className="max-w-4xl mx-auto p-12 text-center text-slate-400">Cargando…</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (noAccess) return <Navigate to="/no-access" replace />;
+  if (resolvingAccess || !profile) {
+    return <div className="max-w-4xl mx-auto p-12 text-center text-slate-400">Comprobando acceso…</div>;
+  }
+  if (!course) return <Navigate to="/portal" replace />;
+  if (profile.role !== 'superadmin' && !profile.courseIds.includes(course.id)) {
+    return <Navigate to="/portal" replace />;
+  }
 
   const currentSession = course.sessions.find(s => s.id === selectedSessionId) || course.sessions[0];
 

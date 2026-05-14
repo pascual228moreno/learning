@@ -3,7 +3,7 @@ export interface Step {
   id: string;
   title: string;
   description: string;
-  duration?: string; // e.g. "20 min"
+  duration?: string;
   isExpanded?: boolean;
   resources?: { title: string; url: string }[];
 }
@@ -43,4 +43,18 @@ export interface Comment {
   sessionId: string;
   text: string;
   createdAt: any;
+}
+
+export type Role = 'student' | 'superadmin';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  photoURL: string | null;
+  role: Role;
+  courseIds: string[];
+  createdAt?: any;
+  createdBy?: string | null;
+  lastLoginAt?: any;
 }
