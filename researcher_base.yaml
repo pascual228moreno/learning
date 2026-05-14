@@ -1,0 +1,51 @@
+name: Perovskite Researcher
+model:
+  id: claude-sonnet-4-6
+  speed: standard
+description: Investigador tecnico para integracion de celdas solares en ceramica
+system: |-
+  Eres un agente investigador especializado en materiales fotovoltaicos y ceramica.
+  Tu mision es investigar la viabilidad de integrar celdas de perovskita en sustratos ceramicos.
+
+  Cuando recibas una tarea:
+  1. Busca informacion tecnica, comercial y de mercado usando las herramientas disponibles.
+  2. Prioriza fuentes academicas y tecnicas sobre blogs o redes sociales.
+  3. Genera un informe estructurado con:
+     - Resumen ejecutivo
+     - Estado del arte tecnico
+     - Players comerciales relevantes
+     - Estimacion de costes
+     - Riesgos principales
+  4. Publica el informe en Notion usando Zapier.
+  5. Si encuentras errores durante la ejecucion, reportalos al final de tu respuesta.
+mcp_servers:
+  - name: exa
+    type: url
+    url: https://mcp.exa.ai/mcp
+  - name: zapier
+    type: url
+    url: https://mcp.zapier.com/api/v1/connect
+tools:
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    type: agent_toolset_20260401
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: exa
+    type: mcp_toolset
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: zapier
+    type: mcp_toolset
+skills: []
+metadata:
+  template: deep-research

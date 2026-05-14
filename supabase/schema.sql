@@ -56,6 +56,23 @@ create table if not exists public.notes (
   updated_at timestamptz not null default now()
 );
 
+-- Files attached to a course session, managed live from /admin. Each row
+-- references a file in the `course-files` Storage bucket via storage_path
+-- so deletes can also clean up the underlying object.
+create table if not exists public.session_attachments (
+  id            uuid primary key default gen_random_uuid(),
+  course_id     text not null,
+  session_id    text not null,
+  title         text not null,
+  url           text not null,
+  storage_path  text,
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null
+);
+
+create index if not exists session_attachments_course_session_idx
+  on public.session_attachments(course_id, session_id, created_at);
+
 -- ----------------------------------------------------------------------------
 -- 2) Helper: is the current user a superadmin?
 --    SECURITY DEFINER so it bypasses RLS when called from policies.
@@ -142,10 +159,11 @@ create trigger profiles_protect
 -- 5) Row Level Security
 -- ----------------------------------------------------------------------------
 
-alter table public.profiles enable row level security;
-alter table public.progress enable row level security;
-alter table public.comments enable row level security;
-alter table public.notes    enable row level security;
+alter table public.profiles            enable row level security;
+alter table public.progress            enable row level security;
+alter table public.comments            enable row level security;
+alter table public.notes               enable row level security;
+alter table public.session_attachments enable row level security;
 
 -- profiles
 drop policy if exists "profiles read self or admin" on public.profiles;
@@ -232,6 +250,33 @@ create policy "notes delete self"
   on public.notes for delete
   using (auth.uid() = user_id);
 
+-- session_attachments — readable by any authenticated user (so they can
+-- download materials of the courses they're enrolled in). Write is
+-- superadmin-only via the existing helper.
+drop policy if exists "session_attachments read auth" on public.session_attachments;
+create policy "session_attachments read auth"
+  on public.session_attachments for select
+  to authenticated
+  using (true);
+
+drop policy if exists "session_attachments insert admin" on public.session_attachments;
+create policy "session_attachments insert admin"
+  on public.session_attachments for insert
+  to authenticated
+  with check (public.is_superadmin());
+
+drop policy if exists "session_attachments update admin" on public.session_attachments;
+create policy "session_attachments update admin"
+  on public.session_attachments for update
+  to authenticated
+  using (public.is_superadmin());
+
+drop policy if exists "session_attachments delete admin" on public.session_attachments;
+create policy "session_attachments delete admin"
+  on public.session_attachments for delete
+  to authenticated
+  using (public.is_superadmin());
+
 -- ----------------------------------------------------------------------------
 -- 6) Realtime publications
 -- ----------------------------------------------------------------------------
@@ -239,6 +284,7 @@ create policy "notes delete self"
 alter publication supabase_realtime add table public.profiles;
 alter publication supabase_realtime add table public.progress;
 alter publication supabase_realtime add table public.comments;
+alter publication supabase_realtime add table public.session_attachments;
 -- notes deliberately NOT in realtime — single-writer per user, no need.
 
 -- ----------------------------------------------------------------------------

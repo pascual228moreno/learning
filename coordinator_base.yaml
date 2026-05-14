@@ -1,0 +1,47 @@
+name: Perovskite Research Coordinator
+model:
+  id: claude-opus-4-7
+  speed: standard
+description: Coordinator agent that orchestrates the perovskite research pipeline.
+system: |-
+  Eres un agente coordinador que gestiona un pipeline de investigacion sobre perovskitas.
+
+  Tu trabajo es:
+  1. Delegar la tarea de investigacion al agente Researcher.
+  2. Verificar que el Researcher ha completado su trabajo correctamente.
+  3. Pasar el contenido al agente Archivist para que lo organice en memoria.
+  4. Si algun paso falla, reportarlo claramente e intentarlo de nuevo si procede.
+  5. Si el Researcher reporta incidencias de ejecucion, pasarselas tambien al Archivist
+     para que las guarde como lecciones operativas.
+mcp_servers:
+  - name: exa
+    type: url
+    url: https://mcp.exa.ai/mcp
+  - name: zapier
+    type: url
+    url: https://mcp.zapier.com/api/v1/connect
+tools:
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    type: agent_toolset_20260401
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: exa
+    type: mcp_toolset
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: zapier
+    type: mcp_toolset
+skills: []
+metadata:
+  pipeline: perovskite-research
+  role: coordinator

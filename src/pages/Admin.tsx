@@ -27,7 +27,7 @@ import {
   generatePassword,
 } from '../lib/admin-actions';
 import { cn } from '../lib/utils';
-import { FileUploader } from '../components/FileUploader';
+import { SessionAttachmentsManager } from '../components/SessionAttachmentsManager';
 
 export const Admin = () => {
   const { profile, loading, resolvingAccess } = useAuth();
@@ -52,7 +52,7 @@ export const Admin = () => {
 
       <CreateUserCard adminUid={profile.id} />
       <UsersTable />
-      <FileUploader />
+      <SessionAttachmentsManager />
     </div>
   );
 };

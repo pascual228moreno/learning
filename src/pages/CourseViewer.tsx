@@ -144,9 +144,56 @@ export const CourseViewer = () => {
   );
 };
 
+interface DbAttachment {
+  id: string;
+  title: string;
+  url: string;
+}
+
 const SessionView = ({ course, session, completedSteps }: { course: Course, session: Session, completedSteps: string[] }) => {
   const { user } = useAuth();
   const [expandedSteps, setExpandedSteps] = useState<string[]>([]);
+  const [dbAttachments, setDbAttachments] = useState<DbAttachment[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const sessionIdStr = String(session.id);
+
+    const load = async () => {
+      const { data } = await supabase
+        .from('session_attachments')
+        .select('id, title, url')
+        .eq('course_id', course.id)
+        .eq('session_id', sessionIdStr)
+        .order('created_at');
+      if (active) setDbAttachments((data ?? []) as DbAttachment[]);
+    };
+    load();
+
+    const channel = supabase
+      .channel(`attachments:${course.id}:${sessionIdStr}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'session_attachments',
+          filter: `course_id=eq.${course.id}`,
+        },
+        () => load()
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [course.id, session.id]);
+
+  const allAttachments = [
+    ...(session.attachments ?? []),
+    ...dbAttachments.map(a => ({ title: a.title, url: a.url })),
+  ];
 
   const toggleStep = (stepId: string) => {
     setExpandedSteps(prev =>
@@ -216,14 +263,14 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
           </section>
         )}
 
-        {session.attachments && session.attachments.length > 0 && (
+        {allAttachments.length > 0 && (
           <section>
             <div className="flex items-center gap-2 text-slate-900 font-bold mb-6 text-xl">
               <Paperclip className="text-golive" size={24} />
               <h3>Material de la sesión</h3>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              {session.attachments.map((att, i) => (
+              {allAttachments.map((att, i) => (
                 <a
                   key={i}
                   href={att.url}
