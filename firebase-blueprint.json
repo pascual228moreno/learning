@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public and private user data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "admin"] }
+      },
+      "required": ["uid", "email"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Course metadata and content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "instructor": { "type": "string" },
+        "category": { "type": "string" },
+        "sessions": { "type": "array" }
+      },
+      "required": ["id", "title"]
+    },
+    "Progress": {
+      "title": "User Progress",
+      "description": "Tracking completed steps in a course",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "stepId": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "courseId", "stepId", "completed"]
+    },
+    "Comment": {
+      "title": "Session Comment",
+      "description": "Comments left by students on sessions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "courseId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "courseId", "sessionId", "text"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "courses/{courseId}": {
+      "schema": "Course",
+      "description": "Course information"
+    },
+    "progress/{userId}_{stepId}": {
+      "schema": "Progress",
+      "description": "User step progress"
+    },
+    "comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Session discussion"
+    }
+  }
+}
