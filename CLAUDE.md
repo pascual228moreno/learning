@@ -83,9 +83,19 @@ Snake_case en DB y en TS, sin capa de mapeo.
 
 ## Auth y roles
 
-- **Superadmin**: hardcoded en `firestore.rules`-style en el trigger SQL `handle_new_user`. El email `1.del.198333@gmail.com` siempre se promociona a `role='superadmin'` la primera vez que firma. Si cambiase, hay que actualizar el trigger en `supabase/schema.sql:65` y reaplicar el SQL.
-- **Bootstrap**: cuando un usuario nuevo se crea en `auth.users` (por signUp del lado cliente o por Add user en Dashboard), el trigger crea su fila en `profiles` con `role='student'` (o `superadmin` si coincide email).
+- **Superadmin**: hardcoded en el trigger SQL `handle_new_user`. El email `1.del.198333@gmail.com` siempre se promociona a `role='superadmin'` la primera vez que aparece en `auth.users`. Si cambiase, hay que actualizar el trigger en `supabase/schema.sql` y reaplicar el SQL.
+- **Bootstrap**: cuando un usuario nuevo se crea en `auth.users` (por signUp del lado cliente, por Add user en Dashboard o por el Edge Function `admin-create-user` que está pendiente), el trigger crea su fila en `profiles` con `role='student'` (o `superadmin` si coincide email).
 - **Trigger de protección**: `enforce_profile_protection` impide que un alumno cambie su `role` o `course_ids` aunque RLS lo dejase pasar. Solo `is_superadmin()` puede modificar esos campos.
+
+### Cambio de contraseña — tres flujos distintos
+
+| Flujo | Quién | Página/acción | Implementación |
+|-------|-------|---------------|----------------|
+| **Usuario cambia la suya** | cualquier user logado | `/account/password` (link en dropdown del nav) | `supabase.auth.updateUser({ password })` en cliente directo |
+| **Admin define la de otro usuario** | superadmin | botón "cambiar pwd" en cada fila de `/admin` | Edge Function `admin-set-password` (usa `service_role`) |
+| **Reset por email** | (deshabilitado) | — | Existía via `resetPasswordForEmail` pero la retiramos: hit del rate limit de email de Supabase Free. Si vuelve a hacer falta, hay que rehacer la pantalla `/reset-password` y el link "Olvidaste tu contraseña" en `Login.tsx` que fue eliminado. |
+
+El flujo del admin (segunda fila) es el patrón canónico para operaciones privilegiadas: cliente invoca Edge Function → función verifica `profile.role === 'superadmin'` server-side → solo entonces usa `service_role` para llamar `auth.admin.updateUserById`. Replicar este patrón para cualquier futura acción admin sensible.
 
 ## Cómo añadir un curso o sesión nuevos (contenido)
 
@@ -128,7 +138,11 @@ Cuando un step tiene `content` (Markdown), `CourseViewer` lo renderiza vía `Mar
 
 `git push origin main` → Vercel construye y publica solo. `vercel.json` añade rewrite SPA para que `/portal`, `/course/*`, etc. sirvan `index.html` y deje a React Router resolver.
 
-Bundle actual: ~650 KB raw / ~190 KB gzip. Si crece mucho, partir con `manualChunks` o `import()` dinámicos.
+El build de Vercel ejecuta primero `npm run build:content` (parsea `content/*.md` → `src/content/courses.json`) y luego `vite build`, así que producción nunca queda con JSON viejo.
+
+Bundle actual: ~850 KB raw / ~250 KB gzip. Subió desde ~650 KB cuando añadimos `react-markdown` + `remark-gfm` para el render del contenido de los módulos. Por encima del warning de Vite (500 KB). Cuando moleste, opciones:
+- `import()` dinámico de `MarkdownContent` y `CourseViewer` (la mayoría del bundle es para esa ruta)
+- `manualChunks` para separar vendor de app
 
 ## Edge Functions (Supabase)
 
@@ -166,13 +180,47 @@ Candidata clara siguiente: `admin-create-user` para crear usuarios desde `/admin
 
 ## Decisiones de diseño
 
-- Sin servidor propio: todo cliente + Supabase como BaaS. Si se necesita lógica protegida (creación admin de usuarios sin email), usar Supabase Edge Functions, NO un backend custom.
+- Sin servidor propio: todo cliente + Supabase como BaaS. Si se necesita lógica protegida (creación admin de usuarios sin email, cambio de password forzado por admin), usar Supabase Edge Functions, NO un backend custom.
 - Snake_case en TS para evitar capas de mapeo entre DB y app.
 - Realtime via `supabase.channel().on('postgres_changes', ...)`, NO polling. Solo una suscripción por recurso para evitar bucles de escritura tipo "lastLoginAt loop" que tuvimos con Firebase (el síntoma: la UI re-renderiza constantemente, los clicks parecen no hacer nada).
 - Login persiste rutas: `<Navigate to="/login" state={{ from: location.pathname }} replace />` para que tras login vuelva a donde el usuario quería.
+- Contenido del curso en Markdown, no en DB: cambios versionados en git, fácil de revisar y revertir. La trade-off es que cada cambio requiere un commit + push (Vercel desplega en ~1 min). Si en algún momento se necesita edición en vivo desde la propia app, ver "Decisiones pendientes".
+- Skill `/content` en `.claude/skills/content/SKILL.md` para el workflow de editado: valida, parsea, lint y propone commit. NO automatiza el push sin confirmación. El script `build-content.ts` es el motor; la skill es el operador inteligente encima.
+
+## Decisiones pendientes
+
+Cosas planteadas y discutidas con el usuario, sin decisión firme todavía. Cuando una se materialice, mover de aquí a la sección que corresponda.
+
+### Pantallazos en el contenido (planteado 2026-05-14)
+El usuario quiere insertar screenshots dentro de los módulos. Tres opciones evaluadas:
+- **A) URL externa libre** (Imgur, CDN): pegas URL en el `.md`. Cero código, máxima fricción operativa.
+- **B) Supabase Storage manual**: bucket en Supabase, subes drag-and-drop desde Dashboard, copias URL pública, pegas en MD. Sin código de app.
+- **C) Widget de upload en `/admin`** (⭐ recomendado): bucket en Supabase + componente que sube + devuelve snippet de markdown listo para copiar. ~40 min de código.
+
+El usuario dijo "me lo pienso". Si elige C, los pasos son:
+1. SQL en Supabase Editor para crear bucket `course-content` (public) + policies que permiten INSERT/UPDATE/DELETE solo a superadmin
+2. Componente en `/admin` que sube via `supabase.storage.from('course-content').upload(...)` y muestra el snippet `![alt](publicUrl)` con botón "Copiar"
+3. Actualizar `content/CONTENT_GUIDE.md` con la convención para imágenes
+
+### Editor de contenido in-app (planteado 2026-05-14)
+El usuario preguntó si compensa construir un editor en la app para modificar el contenido sin tener que tocar git localmente. Mi recomendación: **NO TODAVÍA**. Mientras sea un único admin, GitHub web (botón ✏️ en cualquier `.md`) le da editor con preview de Markdown + commit one-click + Vercel desplega solo. Coste cero, suficiente.
+
+Si más adelante el usuario reporta fricción real con github.com edit, las opciones son (de menos a más esfuerzo):
+- Editor in-app que escribe al repo via GitHub API (necesita Edge Function que guarde un PAT)
+- Migrar el contenido a tablas Supabase (`courses_db`, `sessions_db`, `modules_db`) + CMS en `/admin`. Pierde versionado en git, gana edición real-time sin deploys.
+
+### Otros pendientes menores
+- **Syntax highlighting** en bloques de código de los módulos. `MarkdownContent` los renderiza monoespaciados sobre fondo oscuro pero sin colores. Candidatos: `shiki` (mejor pero pesado), `prism-react-renderer` (más ligero). Lazy-load para no engordar bundle inicial.
+- **Recordar última sesión vista** en `CourseViewer` (ahora siempre arranca en sesión 1).
+- **Edge Function `admin-create-user`** para crear users desde `/admin` sin email confirmation, resolviendo el rate limit de Supabase Free. Ver sección Edge Functions arriba.
+- **Google OAuth** en Login. Necesita OAuth credentials en Google Cloud Console (cuenta personal del usuario) y configurarlas en Supabase Auth → Providers → Google.
 
 ## Cuando algo va mal
 
 - **Usuario logado pero no entra**: verificar que existe su fila en `public.profiles` y que `email_confirmed_at` no es null en `auth.users`. Si falta el confirmed: `update auth.users set email_confirmed_at = now() where email = '...'`.
-- **"permission denied" en Firestore/queries**: revisar policies en `supabase/schema.sql` y que `public.is_superadmin()` devuelve lo esperado para el usuario en cuestión.
-- **Build de Vercel rompe pero local OK**: comprobar que las env vars `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` están en Vercel para los 3 entornos.
+- **"permission denied" en queries Supabase**: revisar policies en `supabase/schema.sql` y que `public.is_superadmin()` devuelve lo esperado para el usuario en cuestión. Las policies se aplican client-side por Supabase, así que un fallo se ve como respuesta vacía (no como excepción).
+- **Build de Vercel rompe pero local OK**: comprobar que las env vars `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` están en Vercel para los 3 entornos (Production, Preview, Development).
+- **`/admin → cambiar pwd` da "Failed to send a request to the Edge Function"**: la función `admin-set-password` no está deployada en Supabase, o está deployada con otro nombre. El nombre exacto en Dashboard tiene que ser `admin-set-password` (con guiones, minúscula). Ver sección Edge Functions.
+- **"email rate limit exceeded" al crear usuarios desde `/admin`**: el toggle "Confirm email" sigue ON en Supabase. Apagar en Auth → Providers → Email. Mientras, crear via Dashboard → Users → Add user → ✅ Auto Confirm.
+- **Módulo no aparece en la web tras editar `.md`**: no se ejecutó `npm run build:content`. El build de prod lo lanza solo, pero `npm run dev` lee el JSON estáticamente — hay que regenerarlo y refrescar.
+- **Edge Function devuelve `Forbidden: caller is not superadmin`**: la fila de `public.profiles` del caller no tiene `role='superadmin'`. Si el caller es el bootstrap superadmin (`1.del.198333@gmail.com`), comprobar que el trigger `handle_new_user` aplicó correctamente — debería pasar automáticamente en su primer signup.
