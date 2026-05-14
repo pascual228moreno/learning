@@ -26,7 +26,8 @@ export const Login = () => {
       await loginWithEmail(email, password);
       navigate(redirectTo, { replace: true });
     } catch (err: any) {
-      setError(mapAuthError(err.code));
+      console.error('Login error (raw):', err);
+      setError(mapAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -43,7 +44,8 @@ export const Login = () => {
       await resetPassword(email);
       setResetSent(true);
     } catch (err: any) {
-      setError(mapAuthError(err.code));
+      console.error('Reset password error (raw):', err);
+      setError(mapAuthError(err));
     }
   };
 
@@ -52,7 +54,8 @@ export const Login = () => {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      setError(mapAuthError(err.code));
+      console.error('Google login error (raw):', err);
+      setError(mapAuthError(err));
     }
   };
 
@@ -147,23 +150,32 @@ export const Login = () => {
   );
 };
 
-function mapAuthError(code: string | undefined): string {
-  switch (code) {
-    case 'auth/invalid-credential':
-    case 'auth/wrong-password':
-    case 'auth/user-not-found':
-      return 'Email o contraseña incorrectos.';
-    case 'auth/invalid-email':
-      return 'El formato del email no es válido.';
-    case 'auth/too-many-requests':
-      return 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
-    case 'auth/user-disabled':
-      return 'Esta cuenta ha sido desactivada.';
-    case 'auth/missing-email':
-      return 'Introduce un email.';
-    case 'auth/network-request-failed':
-      return 'Problema de red. Comprueba tu conexión.';
-    default:
-      return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
+function mapAuthError(err: any): string {
+  const code = String(err?.code || '').toLowerCase();
+  const msg = String(err?.message || err || '').toLowerCase();
+  const status = err?.status;
+
+  if (code === 'invalid_credentials' || msg.includes('invalid login credentials')) {
+    return 'Email o contraseña incorrectos.';
   }
+  if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
+    return 'Tu cuenta existe pero no está confirmada. Contacta con el administrador.';
+  }
+  if (code === 'user_not_found' || msg.includes('user not found')) {
+    return 'No existe ningún usuario con ese email.';
+  }
+  if (msg.includes('invalid') && msg.includes('email')) {
+    return 'El formato del email no es válido.';
+  }
+  if (status === 429 || code === 'over_request_rate_limit' || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
+  }
+  if (code === 'user_banned' || msg.includes('disabled')) {
+    return 'Esta cuenta ha sido desactivada.';
+  }
+  if (msg.includes('network') || msg.includes('failed to fetch')) {
+    return 'Problema de red. Comprueba tu conexión.';
+  }
+
+  return err?.message ? `Error: ${err.message}` : 'No se pudo iniciar sesión. Inténtalo de nuevo.';
 }
