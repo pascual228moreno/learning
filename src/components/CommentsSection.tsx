@@ -1,20 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { MessageSquare, Send, Trash2 } from 'lucide-react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  addDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  orderBy
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Comment } from '../types';
-import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 interface Props {
   courseId: string;
@@ -22,52 +10,66 @@ interface Props {
 }
 
 export const CommentsSection = ({ courseId, sessionId }: Props) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'comments'),
-      where('courseId', '==', courseId),
-      where('sessionId', '==', sessionId),
-      orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-      setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Comment)));
-    });
+    let active = true;
+
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('course_id', courseId)
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false });
+      if (active && !error && data) setComments(data as Comment[]);
+    };
+    load();
+
+    const channel = supabase
+      .channel(`comments:${courseId}:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `course_id=eq.${courseId}`,
+        },
+        () => { load(); }
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
   }, [courseId, sessionId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !newComment.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'comments'), {
-        userId: user.uid,
-        userName: user.displayName,
-        userPhoto: user.photoURL,
-        courseId,
-        sessionId,
-        text: newComment,
-        createdAt: serverTimestamp()
-      });
-      setNewComment("");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'comments');
-    } finally {
-      setIsSubmitting(false);
-    }
+    const { error } = await supabase.from('comments').insert({
+      user_id: user.id,
+      user_name: profile?.display_name || user.email,
+      user_photo: profile?.photo_url,
+      course_id: courseId,
+      session_id: sessionId,
+      text: newComment,
+    });
+    if (error) console.error('Comment insert failed:', error);
+    else setNewComment("");
+    setIsSubmitting(false);
   };
 
   const deleteComment = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'comments', id));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `comments/${id}`);
-    }
+    const { error } = await supabase.from('comments').delete().eq('id', id);
+    if (error) console.error('Comment delete failed:', error);
   };
 
   return (
@@ -104,13 +106,19 @@ export const CommentsSection = ({ courseId, sessionId }: Props) => {
       <div className="space-y-6">
         {comments.map(c => (
           <div key={c.id} className="flex gap-4 group">
-            <img src={c.userPhoto || ""} alt="U" className="w-10 h-10 rounded-2xl bg-slate-100 object-cover border border-slate-100" />
+            {c.user_photo ? (
+              <img src={c.user_photo} alt="" className="w-10 h-10 rounded-2xl bg-slate-100 object-cover border border-slate-100" />
+            ) : (
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-sm border border-slate-100">
+                {(c.user_name || '?')[0]?.toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:border-slate-200 transition-colors">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-sm text-slate-900">{c.userName}</span>
+                <span className="font-bold text-sm text-slate-900">{c.user_name || c.user_id}</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-slate-400">{c.createdAt?.toDate().toLocaleDateString()}</span>
-                  {user?.uid === c.userId && (
+                  <span className="text-[10px] font-bold text-slate-400">{new Date(c.created_at).toLocaleDateString()}</span>
+                  {user?.id === c.user_id && (
                     <button onClick={() => deleteComment(c.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                       <Trash2 size={12} />
                     </button>

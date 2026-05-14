@@ -19,7 +19,7 @@ export const Portal = () => {
 
   const visibleCourses = profile.role === 'superadmin'
     ? courses
-    : courses.filter(c => profile.courseIds.includes(c.id));
+    : courses.filter(c => profile.course_ids.includes(c.id));
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">

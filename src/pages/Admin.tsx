@@ -13,13 +13,7 @@ import {
   Square,
   Save,
 } from 'lucide-react';
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { courses } from '../data';
 import { UserProfile, Role } from '../types';
@@ -52,7 +46,7 @@ export const Admin = () => {
         <p className="text-slate-500 mt-2">Crea cuentas para tus asistentes y asígnales los cursos.</p>
       </header>
 
-      <CreateUserCard adminUid={profile.uid} />
+      <CreateUserCard adminUid={profile.id} />
       <UsersTable />
     </div>
   );
@@ -114,7 +108,7 @@ const CreateUserCard = ({ adminUid }: { adminUid: string }) => {
       setSuccessCreds({ email: email.trim().toLowerCase(), password, displayName });
       reset();
     } catch (err: any) {
-      setError(mapCreateError(err.code));
+      setError(mapCreateError(err));
     } finally {
       setSubmitting(false);
     }
@@ -279,11 +273,29 @@ const UsersTable = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snap) => {
-      setUsers(snap.docs.map(d => d.data() as UserProfile));
-      setLoading(false);
-    });
+    let active = true;
+
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (active) {
+        if (!error && data) setUsers(data as UserProfile[]);
+        setLoading(false);
+      }
+    };
+    load();
+
+    const channel = supabase
+      .channel('profiles:all')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => { load(); })
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -302,7 +314,7 @@ const UsersTable = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {users.map(u => <UserRow key={u.uid} user={u} />)}
+          {users.map((u: UserProfile) => <UserRow key={u.id} user={u} />)}
         </div>
       )}
     </section>
@@ -311,14 +323,12 @@ const UsersTable = () => {
 
 const UserRow = ({ user }: { user: UserProfile }) => {
   const [editing, setEditing] = useState(false);
-  const [selectedCourses, setSelectedCourses] = useState<string[]>(user.courseIds || []);
+  const [selectedCourses, setSelectedCourses] = useState<string[]>(user.course_ids || []);
   const [saving, setSaving] = useState(false);
 
-  // Sync from props only when not actively editing, otherwise we'd clobber
-  // the admin's in-progress selection every time the parent re-renders.
   useEffect(() => {
-    if (!editing) setSelectedCourses(user.courseIds || []);
-  }, [user.courseIds, editing]);
+    if (!editing) setSelectedCourses(user.course_ids || []);
+  }, [user.course_ids, editing]);
 
   const toggleCourse = (id: string) => {
     setSelectedCourses(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
@@ -327,7 +337,7 @@ const UserRow = ({ user }: { user: UserProfile }) => {
   const save = async () => {
     setSaving(true);
     try {
-      await updateUserCourses(user.uid, selectedCourses);
+      await updateUserCourses(user.id, selectedCourses);
       setEditing(false);
     } finally {
       setSaving(false);
@@ -337,22 +347,22 @@ const UserRow = ({ user }: { user: UserProfile }) => {
   const toggleSuperadmin = async () => {
     const next: Role = user.role === 'superadmin' ? 'student' : 'superadmin';
     if (!confirm(`¿Cambiar rol de ${user.email} a ${next === 'superadmin' ? 'superadmin' : 'alumno'}?`)) return;
-    await updateUserRole(user.uid, next);
+    await updateUserRole(user.id, next);
   };
 
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          {user.photoURL ? (
-            <img src={user.photoURL} className="w-10 h-10 rounded-2xl object-cover bg-slate-100 flex-shrink-0" alt="" />
+          {user.photo_url ? (
+            <img src={user.photo_url} className="w-10 h-10 rounded-2xl object-cover bg-slate-100 flex-shrink-0" alt="" />
           ) : (
             <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-sm flex-shrink-0">
-              {(user.displayName || user.email)[0]?.toUpperCase()}
+              {(user.display_name || user.email)[0]?.toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
-            <p className="font-bold text-sm text-slate-900 truncate">{user.displayName || '—'}</p>
+            <p className="font-bold text-sm text-slate-900 truncate">{user.display_name || '—'}</p>
             <p className="text-xs text-slate-500 truncate">{user.email}</p>
           </div>
         </div>
@@ -378,10 +388,10 @@ const UserRow = ({ user }: { user: UserProfile }) => {
         {!editing ? (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-1.5">
-              {(user.courseIds || []).length === 0 && (
+              {(user.course_ids || []).length === 0 && (
                 <span className="text-xs text-slate-400 italic">Sin cursos asignados</span>
               )}
-              {(user.courseIds || []).map(cid => {
+              {(user.course_ids || []).map(cid => {
                 const c = courses.find(x => x.id === cid);
                 return (
                   <span key={cid} className="text-[10px] font-bold bg-slate-50 text-slate-600 px-2.5 py-1 rounded-full">
@@ -428,7 +438,7 @@ const UserRow = ({ user }: { user: UserProfile }) => {
                 <Save size={14} /> {saving ? 'Guardando…' : 'Guardar'}
               </button>
               <button
-                onClick={() => { setEditing(false); setSelectedCourses(user.courseIds || []); }}
+                onClick={() => { setEditing(false); setSelectedCourses(user.course_ids || []); }}
                 className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl text-xs font-bold"
               >
                 Cancelar
@@ -448,17 +458,19 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </label>
 );
 
-function mapCreateError(code: string | undefined): string {
-  switch (code) {
-    case 'auth/email-already-in-use':
-      return 'Ese email ya tiene una cuenta en Firebase Auth. Asígnale cursos desde la lista de usuarios.';
-    case 'auth/invalid-email':
-      return 'El formato del email no es válido.';
-    case 'auth/weak-password':
-      return 'La contraseña debe tener al menos 6 caracteres.';
-    case 'auth/operation-not-allowed':
-      return 'Email/Password no está habilitado en Firebase. Actívalo en Authentication → Sign-in method.';
-    default:
-      return 'No se pudo crear el usuario. Revisa la consola.';
+function mapCreateError(err: any): string {
+  const msg = String(err?.message || err || '').toLowerCase();
+  if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+    return 'Ese email ya tiene una cuenta. Si es nuevo, asígnale cursos desde la lista de usuarios.';
   }
+  if (msg.includes('invalid') && msg.includes('email')) {
+    return 'El formato del email no es válido.';
+  }
+  if (msg.includes('weak') || msg.includes('password')) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+  if (msg.includes('signups not allowed') || msg.includes('disabled')) {
+    return 'Los registros están deshabilitados en Supabase. Actívalos en Auth → Sign In / Providers → Email.';
+  }
+  return err?.message || 'No se pudo crear el usuario. Revisa la consola.';
 }

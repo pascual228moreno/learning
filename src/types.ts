@@ -34,27 +34,39 @@ export interface Course {
   image?: string;
 }
 
-export interface Comment {
-  id: string;
-  userId: string;
-  userName: string;
-  userPhoto?: string;
-  courseId: string;
-  sessionId: string;
-  text: string;
-  createdAt: any;
-}
-
 export type Role = 'student' | 'superadmin';
 
+/** Row from public.profiles (snake_case to match Postgres). */
 export interface UserProfile {
-  uid: string;
+  id: string;
   email: string;
-  displayName: string | null;
-  photoURL: string | null;
+  display_name: string | null;
+  photo_url: string | null;
   role: Role;
-  courseIds: string[];
-  createdAt?: any;
-  createdBy?: string | null;
-  lastLoginAt?: any;
+  course_ids: string[];
+  created_at: string;
+  created_by: string | null;
+  last_login_at: string | null;
+}
+
+/** Row from public.comments. */
+export interface Comment {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_photo: string | null;
+  course_id: string;
+  session_id: string;
+  text: string;
+  created_at: string;
+}
+
+/** Row from public.progress. */
+export interface ProgressRow {
+  id: string;
+  user_id: string;
+  course_id: string;
+  step_id: string;
+  completed: boolean;
+  updated_at: string;
 }

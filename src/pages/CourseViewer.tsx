@@ -11,23 +11,13 @@ import {
   Target,
   PenLine,
   Download,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  setDoc,
-  doc,
-  serverTimestamp
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { courses } from '../data';
-import { Session, Course } from '../types';
+import { Session, Course, ProgressRow } from '../types';
 import { cn } from '../lib/utils';
-import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { CommentsSection } from '../components/CommentsSection';
 
 export const CourseViewer = () => {
@@ -40,13 +30,38 @@ export const CourseViewer = () => {
 
   useEffect(() => {
     if (!user || !courseId) return;
-    const q = query(collection(db, 'progress'), where('userId', '==', user.uid), where('courseId', '==', courseId));
-    return onSnapshot(q, (snapshot) => {
-      const done = snapshot.docs
-        .filter(doc => doc.data().completed)
-        .map(doc => doc.data().stepId);
-      setCompletedSteps(done);
-    });
+    let active = true;
+
+    const load = async () => {
+      const { data } = await supabase
+        .from('progress')
+        .select('step_id, completed')
+        .eq('user_id', user.id)
+        .eq('course_id', courseId);
+      if (active && data) {
+        setCompletedSteps(data.filter(r => r.completed).map(r => r.step_id as string));
+      }
+    };
+    load();
+
+    const channel = supabase
+      .channel(`progress:${user.id}:${courseId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'progress',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => { load(); }
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
   }, [user, courseId]);
 
   if (loading) return <div className="max-w-4xl mx-auto p-12 text-center text-slate-400">Cargando…</div>;
@@ -56,7 +71,7 @@ export const CourseViewer = () => {
     return <div className="max-w-4xl mx-auto p-12 text-center text-slate-400">Comprobando acceso…</div>;
   }
   if (!course) return <Navigate to="/portal" replace />;
-  if (profile.role !== 'superadmin' && !profile.courseIds.includes(course.id)) {
+  if (profile.role !== 'superadmin' && !profile.course_ids.includes(course.id)) {
     return <Navigate to="/portal" replace />;
   }
 
@@ -139,19 +154,18 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
 
   const toggleComplete = async (stepId: string) => {
     if (!user) return;
-    const path = `progress/${user.uid}_${stepId}`;
     const isCurrentlyDone = completedSteps.includes(stepId);
-    try {
-      await setDoc(doc(db, 'progress', `${user.uid}_${stepId}`), {
-        userId: user.uid,
-        courseId: course.id,
-        stepId: stepId,
-        completed: !isCurrentlyDone,
-        updatedAt: serverTimestamp()
-      });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, path);
-    }
+    const row: Partial<ProgressRow> = {
+      user_id: user.id,
+      course_id: course.id,
+      step_id: stepId,
+      completed: !isCurrentlyDone,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('progress')
+      .upsert(row, { onConflict: 'user_id,step_id' });
+    if (error) console.error('Progress upsert failed:', error);
   };
 
   return (

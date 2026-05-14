@@ -1,32 +1,16 @@
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import {
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signOut,
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
-import {
-  setDoc,
-  doc,
-  serverTimestamp,
-  onSnapshot,
-  getDoc
-} from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { UserProfile } from '../types';
-
-export const SUPERADMIN_EMAIL = '1.del.198333@gmail.com';
 
 interface AuthContextValue {
   user: User | null;
+  session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  /** True while we are confirming if the signed-in user has access. */
+  /** True while we are still loading the profile after auth resolves. */
   resolvingAccess: boolean;
-  /** True when signed in but no users/{uid} doc exists (and not the bootstrap superadmin). */
+  /** Signed in but no profile row was found (should not happen in normal flow). */
   noAccess: boolean;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
@@ -36,6 +20,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  session: null,
   profile: null,
   loading: true,
   resolvingAccess: false,
@@ -47,6 +32,7 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,128 +40,129 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [noAccess, setNoAccess] = useState(false);
 
   useEffect(() => {
-    let unsubProfile: (() => void) | null = null;
-    let loginStampedForUid: string | null = null;
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+    let loginStampedForUserId: string | null = null;
 
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+    const loadProfile = async (u: User) => {
+      setResolvingAccess(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', u.id)
+        .maybeSingle();
 
-      setUser(u);
-      if (!u) {
+      if (error) {
+        console.error('Profile load error:', error);
+        setProfile(null);
+        setNoAccess(true);
+      } else if (!data) {
+        setProfile(null);
+        setNoAccess(true);
+      } else {
+        setProfile(data as UserProfile);
+        setNoAccess(false);
+      }
+      setResolvingAccess(false);
+    };
+
+    const stampLogin = async (u: User) => {
+      if (loginStampedForUserId === u.id) return;
+      loginStampedForUserId = u.id;
+      await supabase
+        .from('profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', u.id);
+    };
+
+    const subscribeToProfile = (u: User) => {
+      if (profileChannel) supabase.removeChannel(profileChannel);
+      profileChannel = supabase
+        .channel(`profile:${u.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${u.id}`,
+          },
+          (payload) => {
+            if (payload.eventType === 'DELETE') {
+              setProfile(null);
+              setNoAccess(true);
+            } else if (payload.new) {
+              setProfile(payload.new as UserProfile);
+              setNoAccess(false);
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    const handleSession = async (s: Session | null) => {
+      setSession(s);
+      setUser(s?.user ?? null);
+
+      if (!s?.user) {
         setProfile(null);
         setNoAccess(false);
         setLoading(false);
-        loginStampedForUid = null;
+        loginStampedForUserId = null;
+        if (profileChannel) {
+          supabase.removeChannel(profileChannel);
+          profileChannel = null;
+        }
         return;
       }
 
       setLoading(false);
-      setResolvingAccess(true);
+      await loadProfile(s.user);
+      stampLogin(s.user).catch(() => { /* non-critical */ });
+      subscribeToProfile(s.user);
+    };
 
-      const userRef = doc(db, 'users', u.uid);
+    supabase.auth.getSession().then(({ data }) => handleSession(data.session));
 
-      // Bootstrap: hardcoded superadmin gets a users doc with role='superadmin'.
-      // Also upgrades pre-existing docs that were created before the role field.
-      if (u.email === SUPERADMIN_EMAIL) {
-        const snap = await getDoc(userRef);
-        const data = snap.exists() ? snap.data() : null;
-        if (!data || !data.role) {
-          await setDoc(userRef, {
-            uid: u.uid,
-            email: u.email,
-            displayName: u.displayName,
-            photoURL: u.photoURL,
-            role: 'superadmin',
-            courseIds: data?.courseIds || [],
-            createdAt: data?.createdAt || serverTimestamp(),
-            createdBy: null,
-            lastLoginAt: serverTimestamp(),
-          }, { merge: true });
-        }
-      }
-
-      // Stamp lastLoginAt + sync profile picture once per session — NOT on every
-      // snapshot, otherwise we trigger a write→snapshot→write loop.
-      if (loginStampedForUid !== u.uid) {
-        loginStampedForUid = u.uid;
-        setDoc(userRef, {
-          displayName: u.displayName,
-          photoURL: u.photoURL,
-          lastLoginAt: serverTimestamp(),
-        }, { merge: true }).catch(() => { /* non-critical */ });
-      }
-
-      // Subscribe to the user profile (read-only).
-      let resolved = false;
-      const timer = setTimeout(() => {
-        if (!resolved) {
-          setNoAccess(true);
-          setResolvingAccess(false);
-        }
-      }, 3000);
-
-      unsubProfile = onSnapshot(userRef, (snap) => {
-        resolved = true;
-        clearTimeout(timer);
-        if (!snap.exists()) {
-          setProfile(null);
-          setNoAccess(true);
-        } else {
-          setProfile(snap.data() as UserProfile);
-          setNoAccess(false);
-        }
-        setResolvingAccess(false);
-      }, () => {
-        resolved = true;
-        clearTimeout(timer);
-        setProfile(null);
-        setNoAccess(true);
-        setResolvingAccess(false);
-      });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      handleSession(s);
     });
 
     return () => {
-      unsubAuth();
-      if (unsubProfile) unsubProfile();
+      subscription.unsubscribe();
+      if (profileChannel) supabase.removeChannel(profileChannel);
     };
   }, []);
 
-  const isLoggingIn = useRef(false);
-
   const loginWithGoogle = async () => {
-    if (isLoggingIn.current) return;
-    isLoggingIn.current = true;
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
-    } catch (error: any) {
-      if (error.code !== 'auth/cancelled-popup-request' &&
-          error.code !== 'auth/popup-closed-by-user' &&
-          error.code !== 'auth/internal-error') {
-        console.error("Google login error:", error);
-        throw error;
-      }
-    } finally {
-      isLoggingIn.current = false;
-    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/portal` },
+    });
+    if (error) throw error;
   };
 
   const loginWithEmail = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
   };
 
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    if (error) throw error;
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
   };
 
   return (
     <AuthContext.Provider value={{
-      user, profile, loading, resolvingAccess, noAccess,
+      user, session, profile, loading, resolvingAccess, noAccess,
       loginWithGoogle, loginWithEmail, resetPassword, logout,
     }}>
       {children}
