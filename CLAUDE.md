@@ -4,8 +4,8 @@ Plataforma de formación generalista de Golive. Las asistentes a un curso se log
 
 ## Stack
 
-- **Frontend**: React 19 + TypeScript + Vite 6, Tailwind v4 con tema `golive` rojo `#E3000F`, Motion para animaciones, lucide-react, react-router-dom v7.
-- **Backend**: Supabase (Auth + Postgres + Realtime + RLS). NO Firebase (descartado).
+- **Frontend**: React 19 + TypeScript + Vite 6, Tailwind v4 con tema `golive` rojo `#E3000F` y Montserrat como `--font-sans` (servido localmente desde `public/fonts/`). Motion para animaciones, lucide-react, react-router-dom v7. react-markdown + remark-gfm para el render del contenido de módulos.
+- **Backend**: Supabase (Auth + Postgres + Storage + Realtime + RLS). NO Firebase (descartado).
 - **Hosting**: Vercel (auto-deploy en cada push a `main`).
 - **Repo**: https://github.com/pascual228moreno/learning
 - **URL prod**: https://learning-vert-delta.vercel.app
@@ -43,15 +43,21 @@ src/
 │   ├── Navigation.tsx
 │   ├── LogoutConfirmModal.tsx
 │   ├── CommentsSection.tsx
-│   └── MarkdownContent.tsx    # Render de contenido Markdown de los módulos
+│   ├── MarkdownContent.tsx    # Render de contenido Markdown de los módulos
+│   ├── Notebook.tsx           # Cuaderno flotante privado, auto-save (tabla notes)
+│   └── SessionAttachmentsManager.tsx  # Upload de material por sesión (tabla session_attachments)
 └── pages/
     ├── Landing.tsx            # /
     ├── Login.tsx              # /login — email/password (Google botón deshabilitado)
-    ├── Portal.tsx             # /portal — lista cursos asignados
-    ├── CourseViewer.tsx       # /course/:id — sesiones, pasos, progreso
-    ├── Admin.tsx              # /admin — crear usuarios, asignar cursos, cambiar pwd
+    ├── Portal.tsx             # /portal — lista cursos asignados (saludo personalizado)
+    ├── CourseViewer.tsx       # /course/:id — sesiones, pasos, progreso, attachments
+    ├── Admin.tsx              # /admin — usuarios, cursos, pwd, material por sesión
     ├── ChangePassword.tsx     # /account/password — self-service
     └── NoAccess.tsx           # /no-access — pantalla de bloqueo
+
+public/
+└── fonts/
+    └── Montserrat-VariableFont_wght.ttf   # Servido vía @font-face en index.css
 
 content/                       # FUENTE de cursos en Markdown — ver content/CONTENT_GUIDE.md
 ├── CONTENT_GUIDE.md
@@ -73,13 +79,19 @@ supabase/
 
 ## Modelo de datos en Supabase
 
-3 tablas en `public/`, todas con RLS habilitada y publicadas a Realtime:
+5 tablas en `public/`, todas con RLS habilitada. Las cuatro primeras publicadas a Realtime; `notes` NO (single-writer por usuario, no aporta).
 
 - **`profiles`** (extiende `auth.users`): `id` (uuid), `email`, `display_name`, `photo_url`, `role` (`student` | `superadmin`), `course_ids` (text[]), timestamps.
 - **`progress`**: `user_id`, `course_id`, `step_id`, `completed`. Único por `(user_id, step_id)`.
 - **`comments`**: `user_id`, `user_name`, `user_photo`, `course_id`, `session_id`, `text`, `created_at`.
+- **`notes`**: `user_id` (PK, único por usuario), `content`, `updated_at`. Cuaderno privado, RLS solo permite read/write al propio dueño — **superadmin NO tiene escape hatch a propósito**.
+- **`session_attachments`**: `id`, `course_id`, `session_id`, `title`, `url`, `storage_path`, `created_at`, `created_by`. Material descargable por sesión. Read = authenticated, write = superadmin.
 
 Snake_case en DB y en TS, sin capa de mapeo.
+
+### Storage
+
+- **Bucket `course-files`** (public): hosta los archivos referenciados desde `session_attachments.url`. Policy: read open (público), insert/update/delete restringido a `is_superadmin()`. File size limit: 20 MB. Se gestiona vía `SessionAttachmentsManager` en `/admin`, que sube el archivo y crea la fila en `session_attachments` en la misma operación (con rollback de Storage si el INSERT falla).
 
 ## Auth y roles
 
@@ -127,6 +139,16 @@ El parser deriva el ID de cada módulo como `s<sessionId>-<slug-del-titulo>` (ej
 
 Cuando un step tiene `content` (Markdown), `CourseViewer` lo renderiza vía `MarkdownContent` (`react-markdown` + `remark-gfm`). Estilos en `src/index.css` bajo `.markdown-content`. Sin syntax highlighting todavía (los bloques de código se ven monoespaciados sobre fondo oscuro pero sin colores por lenguaje).
 
+## Material adjunto por sesión (attachments)
+
+Modelo en DB. El admin sube archivos desde `/admin → Material por sesión`, eligiendo el curso y la sesión a la que pertenecen; el archivo va al bucket `course-files` y se crea una fila en `session_attachments`. El `CourseViewer` se suscribe a esa tabla via Realtime y muestra los attachments en el panel "Material de la sesión" — los alumnos los ven aparecer sin recargar.
+
+Frontmatter `attachments:` en los `.md` también funciona (para attachments que viajan con el contenido en git), y el viewer hace merge de ambas fuentes. La via normal es la DB; el frontmatter es para casos en los que quieras versionar archivos con el contenido.
+
+## Cuaderno privado del usuario
+
+Botón flotante abajo-derecha en todas las páginas autorizadas (logado + tiene profile). Una sola fila en `notes` por usuario, escritura debounced a 800ms, flush inmediato en `beforeunload` y `visibilitychange`. RLS bloquea read/write a cualquiera que no sea el propio dueño — incluido el superadmin. Si en el futuro quieres una vista admin de notas, hay que ampliar las policies (consciente trade-off de privacidad).
+
 ## Variables de entorno
 
 `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. La clave es formato nuevo `sb_publishable_*` (compatible con el SDK).
@@ -140,7 +162,7 @@ Cuando un step tiene `content` (Markdown), `CourseViewer` lo renderiza vía `Mar
 
 El build de Vercel ejecuta primero `npm run build:content` (parsea `content/*.md` → `src/content/courses.json`) y luego `vite build`, así que producción nunca queda con JSON viejo.
 
-Bundle actual: ~850 KB raw / ~250 KB gzip. Subió desde ~650 KB cuando añadimos `react-markdown` + `remark-gfm` para el render del contenido de los módulos. Por encima del warning de Vite (500 KB). Cuando moleste, opciones:
+Bundle actual: ~860 KB raw / ~255 KB gzip. Subió desde ~650 KB cuando añadimos `react-markdown` + `remark-gfm` para el render del contenido de los módulos. Por encima del warning de Vite (500 KB). Cuando moleste, opciones:
 - `import()` dinámico de `MarkdownContent` y `CourseViewer` (la mayoría del bundle es para esa ruta)
 - `manualChunks` para separar vendor de app
 
@@ -191,17 +213,6 @@ Candidata clara siguiente: `admin-create-user` para crear usuarios desde `/admin
 
 Cosas planteadas y discutidas con el usuario, sin decisión firme todavía. Cuando una se materialice, mover de aquí a la sección que corresponda.
 
-### Pantallazos en el contenido (planteado 2026-05-14)
-El usuario quiere insertar screenshots dentro de los módulos. Tres opciones evaluadas:
-- **A) URL externa libre** (Imgur, CDN): pegas URL en el `.md`. Cero código, máxima fricción operativa.
-- **B) Supabase Storage manual**: bucket en Supabase, subes drag-and-drop desde Dashboard, copias URL pública, pegas en MD. Sin código de app.
-- **C) Widget de upload en `/admin`** (⭐ recomendado): bucket en Supabase + componente que sube + devuelve snippet de markdown listo para copiar. ~40 min de código.
-
-El usuario dijo "me lo pienso". Si elige C, los pasos son:
-1. SQL en Supabase Editor para crear bucket `course-content` (public) + policies que permiten INSERT/UPDATE/DELETE solo a superadmin
-2. Componente en `/admin` que sube via `supabase.storage.from('course-content').upload(...)` y muestra el snippet `![alt](publicUrl)` con botón "Copiar"
-3. Actualizar `content/CONTENT_GUIDE.md` con la convención para imágenes
-
 ### Editor de contenido in-app (planteado 2026-05-14)
 El usuario preguntó si compensa construir un editor en la app para modificar el contenido sin tener que tocar git localmente. Mi recomendación: **NO TODAVÍA**. Mientras sea un único admin, GitHub web (botón ✏️ en cualquier `.md`) le da editor con preview de Markdown + commit one-click + Vercel desplega solo. Coste cero, suficiente.
 
@@ -209,11 +220,15 @@ Si más adelante el usuario reporta fricción real con github.com edit, las opci
 - Editor in-app que escribe al repo via GitHub API (necesita Edge Function que guarde un PAT)
 - Migrar el contenido a tablas Supabase (`courses_db`, `sessions_db`, `modules_db`) + CMS en `/admin`. Pierde versionado en git, gana edición real-time sin deploys.
 
+### Pantallazos sueltos dentro de un módulo (parcialmente resuelto)
+Para attachments asociados a una sesión, el flujo está hecho (`SessionAttachmentsManager` → `course-files` bucket → `session_attachments` table). Para **pegar una imagen dentro del cuerpo Markdown de un módulo concreto** (caso "screenshot inline"), la opción sigue siendo subirla al bucket y pegar `![alt](url)` en el `.md`. Si esa fricción molesta a futuro, podemos meter un upload extra en el editor de contenido (cuando lo haya) o exponer el bucket con un widget "URL libre" en `/admin`.
+
 ### Otros pendientes menores
 - **Syntax highlighting** en bloques de código de los módulos. `MarkdownContent` los renderiza monoespaciados sobre fondo oscuro pero sin colores. Candidatos: `shiki` (mejor pero pesado), `prism-react-renderer` (más ligero). Lazy-load para no engordar bundle inicial.
 - **Recordar última sesión vista** en `CourseViewer` (ahora siempre arranca en sesión 1).
 - **Edge Function `admin-create-user`** para crear users desde `/admin` sin email confirmation, resolviendo el rate limit de Supabase Free. Ver sección Edge Functions arriba.
 - **Google OAuth** en Login. Necesita OAuth credentials en Google Cloud Console (cuenta personal del usuario) y configurarlas en Supabase Auth → Providers → Google.
+- **Backups de notas**: backup diario con 1 día de retención en Supabase Free. Si un alumno borra todas sus notas por accidente, solo hay ventana de un día para recuperar. Para más historial: Plan Pro (7 días) o snapshots manuales en cliente.
 
 ## Cuando algo va mal
 
@@ -224,3 +239,6 @@ Si más adelante el usuario reporta fricción real con github.com edit, las opci
 - **"email rate limit exceeded" al crear usuarios desde `/admin`**: el toggle "Confirm email" sigue ON en Supabase. Apagar en Auth → Providers → Email. Mientras, crear via Dashboard → Users → Add user → ✅ Auto Confirm.
 - **Módulo no aparece en la web tras editar `.md`**: no se ejecutó `npm run build:content`. El build de prod lo lanza solo, pero `npm run dev` lee el JSON estáticamente — hay que regenerarlo y refrescar.
 - **Edge Function devuelve `Forbidden: caller is not superadmin`**: la fila de `public.profiles` del caller no tiene `role='superadmin'`. Si el caller es el bootstrap superadmin (`1.del.198333@gmail.com`), comprobar que el trigger `handle_new_user` aplicó correctamente — debería pasar automáticamente en su primer signup.
+- **Attachments suben a Storage pero no aparecen en `/admin`**: la tabla `session_attachments` no existe o la RLS no permite el read. Verificar con `select table_name from information_schema.tables where table_name = 'session_attachments'`. Si no devuelve nada, hay que correr el SQL en el schema correcto (no en `default`, en el schema `public` del proyecto activo).
+- **Upload de archivo falla con `new row violates row-level security policy`**: el caller no es superadmin o el bucket `course-files` no tiene las policies correctas. Re-correr el bloque de policies del bucket en `supabase/schema.sql` sección 7.
+- **El cuaderno aparece pero el botón flota encima de la sidebar móvil del CourseViewer**: el botón del cuaderno ocupa `bottom-6 right-6`; la sidebar del CourseViewer mobile se movió a `bottom-24 right-6` para apilarse encima. Si vuelve el solapamiento, comprobar que se mantiene esa convención de offsets.
