@@ -240,3 +240,46 @@ alter publication supabase_realtime add table public.profiles;
 alter publication supabase_realtime add table public.progress;
 alter publication supabase_realtime add table public.comments;
 -- notes deliberately NOT in realtime — single-writer per user, no need.
+
+-- ----------------------------------------------------------------------------
+-- 7) Storage — course-files bucket
+-- ----------------------------------------------------------------------------
+
+-- Public read bucket for slides, PDFs, code samples, etc. that the admin
+-- attaches to sessions. Write is restricted to superadmin via the same
+-- is_superadmin() helper used elsewhere.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('course-files', 'course-files', true, 20971520)  -- 20 MB cap per file
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "course-files read" on storage.objects;
+create policy "course-files read"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'course-files');
+
+drop policy if exists "course-files insert by superadmin" on storage.objects;
+create policy "course-files insert by superadmin"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );
+
+drop policy if exists "course-files update by superadmin" on storage.objects;
+create policy "course-files update by superadmin"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );
+
+drop policy if exists "course-files delete by superadmin" on storage.objects;
+create policy "course-files delete by superadmin"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );

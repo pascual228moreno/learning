@@ -12,6 +12,7 @@ import {
   PenLine,
   Download,
   Sparkles,
+  Paperclip,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -210,6 +211,34 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
                   <span className="text-2xl font-black text-golive/20 italic">{String(i + 1).padStart(2, '0')}</span>
                   <p className="text-sm text-slate-600 leading-relaxed font-medium">{obj}</p>
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {session.attachments && session.attachments.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 text-slate-900 font-bold mb-6 text-xl">
+              <Paperclip className="text-golive" size={24} />
+              <h3>Material de la sesión</h3>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {session.attachments.map((att, i) => (
+                <a
+                  key={i}
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center gap-4 p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-golive/30 hover:shadow-lg hover:shadow-golive/5 transition-all"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-golive/10 text-golive flex items-center justify-center flex-shrink-0 group-hover:bg-golive group-hover:text-white transition-colors">
+                    <Download size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900 truncate">{att.title}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descargar</p>
+                  </div>
+                </a>
               ))}
             </div>
           </section>
