@@ -49,6 +49,7 @@ interface Session {
   script: Step[];
   exercises: { id: string; title: string; description: string }[];
   takeaways: string[];
+  attachments?: { title: string; url: string }[];
 }
 
 interface Course {
@@ -132,6 +133,13 @@ function parseSession(filePath: string): Session {
 
   const script = parseModules(Number(fm.id), parsed.content);
 
+  const attachments = Array.isArray(fm.attachments)
+    ? (fm.attachments as Session['attachments'])!.filter(
+        (a): a is { title: string; url: string } =>
+          !!a && typeof a.title === 'string' && typeof a.url === 'string'
+      )
+    : undefined;
+
   return {
     id: Number(fm.id),
     title: String(fm.title),
@@ -140,6 +148,7 @@ function parseSession(filePath: string): Session {
     script,
     exercises: Array.isArray(fm.exercises) ? (fm.exercises as Session['exercises']) : [],
     takeaways: Array.isArray(fm.takeaways) ? fm.takeaways.map(String) : [],
+    attachments,
   };
 }
 

@@ -1,0 +1,66 @@
+name: Perovskite Research Coordinator
+model:
+  id: claude-opus-4-7
+  speed: standard
+description: >
+  Coordinator agent that orchestrates the perovskite research pipeline: triggers the research
+  agent to gather market information, validates the results, passes the content to the archivist
+  agent for structured archiving, and delegates operational lessons from execution incidents
+  for continuous improvement.
+system: |-
+  You are a coordinator agent managing a two-step research pipeline about perovskites.
+  Your job is to:
+  1) Delegate research tasks to the perovskite research agent, verify that it has successfully
+     retrieved detailed market information and created the Notion page via Zapier.
+  2) Once confirmed, pass the collected content to the archivist agent so it can organize
+     and archive the information properly. Always verify the research agent output before
+     forwarding to the archivist. If any step fails, report the issue clearly and retry
+     if appropriate.
+
+  ## Ciclo de mejora continua
+  Cuando el researcher devuelva su resultado, revisa si incluye una seccion de incidencias
+  de ejecucion. Si la tiene:
+  1. Extrae las incidencias reportadas.
+  2. Despues de pasar el contenido de investigacion al archivist, enviále un SEGUNDO mensaje:
+     "Guarda las siguientes lecciones operativas en /operativo/lecciones_ejecucion.md dentro
+     del almacen de memoria. Si el fichero ya existe, actualiza anadiendo las nuevas lecciones
+     sin borrar las anteriores. Formato:
+     ## [Herramienta] — [Fecha]
+     - Error: [descripcion]
+     - Causa: [por que fallo]
+     - Solucion: [que funciono]
+     - Regla: [instruccion para la proxima vez]"
+  3. Si el researcher NO incluye seccion de incidencias pero menciono problemas en su texto,
+     extrae tu la informacion y delegala igualmente al archivist con el mismo formato y ruta.
+mcp_servers:
+  - name: exa
+    type: url
+    url: https://mcp.exa.ai/mcp
+  - name: zapier
+    type: url
+    url: https://mcp.zapier.com/api/v1/connect
+tools:
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    type: agent_toolset_20260401
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: exa
+    type: mcp_toolset
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: zapier
+    type: mcp_toolset
+skills: []
+metadata:
+  pipeline: perovskite-research
+  role: coordinator

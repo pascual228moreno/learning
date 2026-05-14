@@ -8,6 +8,7 @@ import { CourseViewer } from './pages/CourseViewer';
 import { Admin } from './pages/Admin';
 import { NoAccess } from './pages/NoAccess';
 import { ChangePassword } from './pages/ChangePassword';
+import { Notebook } from './components/Notebook';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/no-access" element={<NoAccess />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+          <Notebook />
         </div>
       </Router>
     </AuthProvider>

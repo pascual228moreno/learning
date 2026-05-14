@@ -16,6 +16,11 @@ export interface Exercise {
   description: string;
 }
 
+export interface Attachment {
+  title: string;
+  url: string;
+}
+
 export interface Session {
   id: number;
   title: string;
@@ -24,6 +29,7 @@ export interface Session {
   script: Step[];
   exercises: Exercise[];
   takeaways: string[];
+  attachments?: Attachment[];
 }
 
 export interface Course {

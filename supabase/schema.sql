@@ -48,6 +48,31 @@ create table if not exists public.comments (
 create index if not exists comments_course_session_idx
   on public.comments(course_id, session_id, created_at desc);
 
+-- One free-form notebook per user. Private, no comparison with progress
+-- or comments — just a scratchpad that follows them around the site.
+create table if not exists public.notes (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  content    text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- Files attached to a course session, managed live from /admin. Each row
+-- references a file in the `course-files` Storage bucket via storage_path
+-- so deletes can also clean up the underlying object.
+create table if not exists public.session_attachments (
+  id            uuid primary key default gen_random_uuid(),
+  course_id     text not null,
+  session_id    text not null,
+  title         text not null,
+  url           text not null,
+  storage_path  text,
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null
+);
+
+create index if not exists session_attachments_course_session_idx
+  on public.session_attachments(course_id, session_id, created_at);
+
 -- ----------------------------------------------------------------------------
 -- 2) Helper: is the current user a superadmin?
 --    SECURITY DEFINER so it bypasses RLS when called from policies.
@@ -134,9 +159,11 @@ create trigger profiles_protect
 -- 5) Row Level Security
 -- ----------------------------------------------------------------------------
 
-alter table public.profiles enable row level security;
-alter table public.progress enable row level security;
-alter table public.comments enable row level security;
+alter table public.profiles            enable row level security;
+alter table public.progress            enable row level security;
+alter table public.comments            enable row level security;
+alter table public.notes               enable row level security;
+alter table public.session_attachments enable row level security;
 
 -- profiles
 drop policy if exists "profiles read self or admin" on public.profiles;
@@ -202,6 +229,54 @@ create policy "comments delete self or admin"
   on public.comments for delete
   using (auth.uid() = user_id or public.is_superadmin());
 
+-- notes — strictly private to each user. No admin override on purpose.
+drop policy if exists "notes read self" on public.notes;
+create policy "notes read self"
+  on public.notes for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "notes insert self" on public.notes;
+create policy "notes insert self"
+  on public.notes for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "notes update self" on public.notes;
+create policy "notes update self"
+  on public.notes for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "notes delete self" on public.notes;
+create policy "notes delete self"
+  on public.notes for delete
+  using (auth.uid() = user_id);
+
+-- session_attachments — readable by any authenticated user (so they can
+-- download materials of the courses they're enrolled in). Write is
+-- superadmin-only via the existing helper.
+drop policy if exists "session_attachments read auth" on public.session_attachments;
+create policy "session_attachments read auth"
+  on public.session_attachments for select
+  to authenticated
+  using (true);
+
+drop policy if exists "session_attachments insert admin" on public.session_attachments;
+create policy "session_attachments insert admin"
+  on public.session_attachments for insert
+  to authenticated
+  with check (public.is_superadmin());
+
+drop policy if exists "session_attachments update admin" on public.session_attachments;
+create policy "session_attachments update admin"
+  on public.session_attachments for update
+  to authenticated
+  using (public.is_superadmin());
+
+drop policy if exists "session_attachments delete admin" on public.session_attachments;
+create policy "session_attachments delete admin"
+  on public.session_attachments for delete
+  to authenticated
+  using (public.is_superadmin());
+
 -- ----------------------------------------------------------------------------
 -- 6) Realtime publications
 -- ----------------------------------------------------------------------------
@@ -209,3 +284,48 @@ create policy "comments delete self or admin"
 alter publication supabase_realtime add table public.profiles;
 alter publication supabase_realtime add table public.progress;
 alter publication supabase_realtime add table public.comments;
+alter publication supabase_realtime add table public.session_attachments;
+-- notes deliberately NOT in realtime — single-writer per user, no need.
+
+-- ----------------------------------------------------------------------------
+-- 7) Storage — course-files bucket
+-- ----------------------------------------------------------------------------
+
+-- Public read bucket for slides, PDFs, code samples, etc. that the admin
+-- attaches to sessions. Write is restricted to superadmin via the same
+-- is_superadmin() helper used elsewhere.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('course-files', 'course-files', true, 20971520)  -- 20 MB cap per file
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "course-files read" on storage.objects;
+create policy "course-files read"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'course-files');
+
+drop policy if exists "course-files insert by superadmin" on storage.objects;
+create policy "course-files insert by superadmin"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );
+
+drop policy if exists "course-files update by superadmin" on storage.objects;
+create policy "course-files update by superadmin"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );
+
+drop policy if exists "course-files delete by superadmin" on storage.objects;
+create policy "course-files delete by superadmin"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'course-files' and public.is_superadmin()
+  );

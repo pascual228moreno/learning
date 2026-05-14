@@ -12,6 +12,7 @@ import {
   PenLine,
   Download,
   Sparkles,
+  Paperclip,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -129,7 +130,7 @@ export const CourseViewer = () => {
       <main className="flex-1 min-w-0 bg-white relative">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-golive text-white rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce"
+          className="lg:hidden fixed bottom-24 right-6 w-14 h-14 bg-golive text-white rounded-2xl shadow-2xl flex items-center justify-center z-50"
         >
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -143,9 +144,56 @@ export const CourseViewer = () => {
   );
 };
 
+interface DbAttachment {
+  id: string;
+  title: string;
+  url: string;
+}
+
 const SessionView = ({ course, session, completedSteps }: { course: Course, session: Session, completedSteps: string[] }) => {
   const { user } = useAuth();
   const [expandedSteps, setExpandedSteps] = useState<string[]>([]);
+  const [dbAttachments, setDbAttachments] = useState<DbAttachment[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const sessionIdStr = String(session.id);
+
+    const load = async () => {
+      const { data } = await supabase
+        .from('session_attachments')
+        .select('id, title, url')
+        .eq('course_id', course.id)
+        .eq('session_id', sessionIdStr)
+        .order('created_at');
+      if (active) setDbAttachments((data ?? []) as DbAttachment[]);
+    };
+    load();
+
+    const channel = supabase
+      .channel(`attachments:${course.id}:${sessionIdStr}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'session_attachments',
+          filter: `course_id=eq.${course.id}`,
+        },
+        () => load()
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [course.id, session.id]);
+
+  const allAttachments = [
+    ...(session.attachments ?? []),
+    ...dbAttachments.map(a => ({ title: a.title, url: a.url })),
+  ];
 
   const toggleStep = (stepId: string) => {
     setExpandedSteps(prev =>
@@ -210,6 +258,34 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
                   <span className="text-2xl font-black text-golive/20 italic">{String(i + 1).padStart(2, '0')}</span>
                   <p className="text-sm text-slate-600 leading-relaxed font-medium">{obj}</p>
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {allAttachments.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 text-slate-900 font-bold mb-6 text-xl">
+              <Paperclip className="text-golive" size={24} />
+              <h3>Material de la sesión</h3>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {allAttachments.map((att, i) => (
+                <a
+                  key={i}
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center gap-4 p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-golive/30 hover:shadow-lg hover:shadow-golive/5 transition-all"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-golive/10 text-golive flex items-center justify-center flex-shrink-0 group-hover:bg-golive group-hover:text-white transition-colors">
+                    <Download size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900 truncate">{att.title}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descargar</p>
+                  </div>
+                </a>
               ))}
             </div>
           </section>
