@@ -12,6 +12,7 @@ import {
   CheckSquare,
   Square,
   Save,
+  Mail,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +22,7 @@ import {
   createUser,
   updateUserCourses,
   updateUserRole,
+  sendPasswordResetEmail,
   generatePassword,
 } from '../lib/admin-actions';
 import { cn } from '../lib/utils';
@@ -325,6 +327,8 @@ const UserRow = ({ user }: { user: UserProfile }) => {
   const [editing, setEditing] = useState(false);
   const [selectedCourses, setSelectedCourses] = useState<string[]>(user.course_ids || []);
   const [saving, setSaving] = useState(false);
+  const [resetState, setResetState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing) setSelectedCourses(user.course_ids || []);
@@ -350,6 +354,21 @@ const UserRow = ({ user }: { user: UserProfile }) => {
     await updateUserRole(user.id, next);
   };
 
+  const sendResetEmail = async () => {
+    if (!confirm(`Enviar email de reset de contraseña a ${user.email}?`)) return;
+    setResetState('sending');
+    setResetError(null);
+    try {
+      await sendPasswordResetEmail(user.email);
+      setResetState('sent');
+      setTimeout(() => setResetState('idle'), 4000);
+    } catch (err: any) {
+      setResetError(err?.message || 'Error');
+      setResetState('error');
+      setTimeout(() => setResetState('idle'), 5000);
+    }
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -367,7 +386,7 @@ const UserRow = ({ user }: { user: UserProfile }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={cn(
             "text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest",
             user.role === 'superadmin' ? "bg-golive/10 text-golive" : "bg-slate-100 text-slate-500"
@@ -380,6 +399,23 @@ const UserRow = ({ user }: { user: UserProfile }) => {
             title="Cambiar rol"
           >
             cambiar
+          </button>
+          <button
+            onClick={sendResetEmail}
+            disabled={resetState === 'sending'}
+            className={cn(
+              "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md transition-colors",
+              resetState === 'sent' ? "text-green-600 bg-green-50" :
+              resetState === 'error' ? "text-red-600 bg-red-50" :
+              "text-slate-400 hover:text-golive hover:bg-slate-50"
+            )}
+            title={resetError || 'Enviar email para resetear contraseña'}
+          >
+            <Mail size={10} />
+            {resetState === 'sending' && 'enviando…'}
+            {resetState === 'sent' && 'enviado'}
+            {resetState === 'error' && (resetError?.toLowerCase().includes('rate') ? 'rate limit' : 'error')}
+            {resetState === 'idle' && 'reset pwd'}
           </button>
         </div>
       </div>

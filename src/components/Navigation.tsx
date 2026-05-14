@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogOut, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { LogOut, ShieldCheck, KeyRound, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
 
@@ -42,6 +42,12 @@ export const Navigation = () => {
                         <p className="text-xs font-bold text-slate-900 truncate">{profile?.display_name || '—'}</p>
                         <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                       </div>
+                      <Link
+                        to="/account/password"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                      >
+                        <KeyRound size={14} /> Cambiar contraseña
+                      </Link>
                       <button
                         onClick={() => setShowLogoutConfirm(true)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 rounded-lg transition-colors"

@@ -79,6 +79,14 @@ export async function updateUserRole(uid: string, role: Role) {
   if (error) throw error;
 }
 
+export async function sendPasswordResetEmail(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    email.trim().toLowerCase(),
+    { redirectTo: `${window.location.origin}/reset-password` }
+  );
+  if (error) throw error;
+}
+
 export function generatePassword(length = 12): string {
   const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
   const bytes = new Uint32Array(length);
