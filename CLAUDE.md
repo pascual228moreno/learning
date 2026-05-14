@@ -115,9 +115,37 @@ Snake_case en DB y en TS, sin capa de mapeo.
 
 Bundle actual: ~650 KB raw / ~190 KB gzip. Si crece mucho, partir con `manualChunks` o `import()` dinámicos.
 
+## Edge Functions (Supabase)
+
+Vive en `supabase/functions/*/index.ts`. Cada función es una carpeta con su `index.ts` (runtime Deno).
+
+**Funciones desplegadas:**
+
+- **`admin-set-password`** — permite a un superadmin definir directamente la contraseña de cualquier usuario, sin enviar emails (esquiva el rate limit de Supabase free). Verifica el role del caller server-side antes de usar `service_role` para llamar `auth.admin.updateUserById`. Se invoca desde `src/lib/admin-actions.ts:setUserPassword()` con `supabase.functions.invoke('admin-set-password', { body: { userId, newPassword } })`.
+
+**Despliegue (sin CLI, vía Dashboard):**
+
+1. https://supabase.com/dashboard/project/kphzcfxelqyxfiohyhnk/functions
+2. **Deploy a new function** → nombre exacto = nombre de la carpeta en `supabase/functions/`
+3. Pegar el contenido de `index.ts` en el editor → Deploy
+
+⚠️ **El nombre debe coincidir exactamente** con el string que pasa `supabase.functions.invoke()`. Si renombras la función en Dashboard, hay que actualizar el código.
+
+**Env vars auto-inyectadas (no configurar a mano):** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. El `service_role` JAMÁS sale del entorno de la Edge Function — por eso este patrón es seguro.
+
+**Patrón para añadir más funciones admin:**
+1. Crear `supabase/functions/admin-X/index.ts` con código Deno
+2. Validar Authorization header → recuperar caller con anon client
+3. Comprobar `profiles.role === 'superadmin'`
+4. Solo entonces, crear admin client con `SUPABASE_SERVICE_ROLE_KEY` y hacer la operación privilegiada
+5. Deploy desde Dashboard con el mismo nombre que la carpeta
+6. Llamar desde `src/lib/admin-actions.ts`
+
+Candidata clara siguiente: `admin-create-user` para crear usuarios desde `/admin` sin disparar emails (`auth.admin.createUser({ email_confirm: true })`), resolviendo el rate limit.
+
 ## Gotchas activos
 
-- **Rate limit de email en Supabase Free**: si "Confirm email" está ON en Auth → Providers → Email, cada signUp() desde `/admin` intenta mandar email → 4 emails/h máximo y se bloquea. Workaround: crear usuarios desde Supabase Dashboard → Authentication → Users con ✅ Auto Confirm. Plan a futuro: Edge Function con `service_role` que use `auth.admin.createUser({ email_confirm: true })`.
+- **Rate limit de email en Supabase Free** al CREAR usuarios desde `/admin`: si "Confirm email" está ON en Auth → Providers → Email, cada signUp() intenta mandar email → 4 emails/h máximo y se bloquea. Workaround actual: crear usuarios desde Supabase Dashboard → Authentication → Users con ✅ Auto Confirm. Solución definitiva: implementar `admin-create-user` Edge Function (ver sección Edge Functions arriba).
 - **Botón Google en Login**: el provider Google no está activado en Supabase. Click muestra `400 Unsupported provider`. Pendiente: configurar OAuth credentials en Google Cloud Console (cuenta personal) y conectar en Supabase.
 - **CourseViewer fija session 1 al entrar**: si quieres recordar última sesión vista, hay que persistirla.
 
