@@ -45,8 +45,11 @@ Campos:
 | `instructor`  | sí          | Texto libre |
 | `category`    | sí          | Aparece como tag pequeño |
 | `image`       | sí          | URL pública. Usa Unsplash o tu propio CDN |
+| `published`   | opcional    | `false` para esconder el curso del portal sin borrarlo. Por defecto se considera publicado. |
 
 El cuerpo del archivo puede estar vacío. Si lo rellenas, no se usa por ahora.
+
+> **Tip — esconder un curso temporalmente**: añade `published: false` al frontmatter. El parser lo omite del JSON generado y el portal no lo muestra. La carpeta y los `.md` se quedan donde están para cuando quieras volver a publicarlo: cambias a `published: true` y vuelve a aparecer en el siguiente build.
 
 ---
 

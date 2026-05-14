@@ -143,7 +143,7 @@ function parseSession(filePath: string): Session {
   };
 }
 
-function parseCourse(courseDir: string): Course {
+function parseCourse(courseDir: string): Course | null {
   const courseId = basename(courseDir);
   const courseMdPath = join(courseDir, '_course.md');
   if (!existsSync(courseMdPath)) {
@@ -151,11 +151,15 @@ function parseCourse(courseDir: string): Course {
   }
 
   const courseMd = matter(readFileSync(courseMdPath, 'utf-8'));
-  const meta = courseMd.data as Partial<Course>;
+  const meta = courseMd.data as Partial<Course> & { published?: boolean };
 
   if (!meta.title) {
     throw new Error(`Course ${courseId}: _course.md must define "title" in frontmatter.`);
   }
+
+  // `published: false` keeps the course in source for future use but hides it
+  // from the app entirely (no card in Portal, route 404s back to /portal).
+  if (meta.published === false) return null;
 
   const sessionFiles = readdirSync(courseDir)
     .filter(f => /^sesion-\d+/.test(f) && f.endsWith('.md'))
@@ -191,7 +195,11 @@ function main() {
     process.exit(1);
   }
 
-  const courses = courseDirs.map(parseCourse);
+  const allParsed = courseDirs.map(d => ({ dir: basename(d), course: parseCourse(d) }));
+  const courses = allParsed
+    .filter((p): p is { dir: string; course: Course } => p.course !== null)
+    .map(p => p.course);
+  const skipped = allParsed.filter(p => p.course === null).map(p => p.dir);
 
   if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(OUT_FILE, JSON.stringify(courses, null, 2) + '\n');
@@ -202,6 +210,9 @@ function main() {
     console.log(
       `✓ ${c.id.padEnd(30)} ${c.sessions.length} sesiones, ${totalSteps} módulos`
     );
+  }
+  for (const id of skipped) {
+    console.log(`· ${id.padEnd(30)} (published: false → omitido)`);
   }
   console.log(`\nWrote ${OUT_FILE}`);
 }
