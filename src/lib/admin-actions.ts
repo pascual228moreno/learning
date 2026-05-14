@@ -48,17 +48,23 @@ export async function createUser({
     if (displayName) {
       await updateProfile(cred.user, { displayName });
     }
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      uid: cred.user.uid,
-      email: email.trim().toLowerCase(),
-      displayName,
-      photoURL: null,
-      role,
-      courseIds,
-      createdAt: serverTimestamp(),
-      createdBy: createdByUid,
-      lastLoginAt: null,
-    });
+    try {
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        uid: cred.user.uid,
+        email: email.trim().toLowerCase(),
+        displayName,
+        photoURL: null,
+        role,
+        courseIds,
+        createdAt: serverTimestamp(),
+        createdBy: createdByUid,
+        lastLoginAt: null,
+      });
+    } catch (firestoreErr) {
+      // Roll back the orphan Auth account so the admin can retry cleanly.
+      try { await cred.user.delete(); } catch { /* best effort */ }
+      throw firestoreErr;
+    }
     await signOut(secondaryAuth);
     return cred.user.uid;
   } finally {
