@@ -79,12 +79,17 @@ export async function updateUserRole(uid: string, role: Role) {
   if (error) throw error;
 }
 
-export async function sendPasswordResetEmail(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    email.trim().toLowerCase(),
-    { redirectTo: `${window.location.origin}/reset-password` }
-  );
+/**
+ * Sets a user's password via the admin-set-password Edge Function.
+ * The function uses service_role server-side to call auth.admin.updateUserById.
+ * Caller must be a superadmin (the function re-verifies).
+ */
+export async function setUserPassword(userId: string, newPassword: string) {
+  const { data, error } = await supabase.functions.invoke('admin-set-password', {
+    body: { userId, newPassword },
+  });
   if (error) throw error;
+  if (data?.error) throw new Error(data.error);
 }
 
 export function generatePassword(length = 12): string {

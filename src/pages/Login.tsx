@@ -1,10 +1,10 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { GraduationCap, Mail, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { GraduationCap, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login = () => {
-  const { user, loginWithGoogle, loginWithEmail, resetPassword } = useAuth();
+  const { user, loginWithGoogle, loginWithEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = (location.state as any)?.from || '/portal';
@@ -13,7 +13,6 @@ export const Login = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
 
   if (user) return <Navigate to={redirectTo} replace />;
 
@@ -30,22 +29,6 @@ export const Login = () => {
       setError(mapAuthError(err));
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const onResetClick = async () => {
-    setError(null);
-    setResetSent(false);
-    if (!email) {
-      setError('Introduce primero tu email arriba y vuelve a hacer click.');
-      return;
-    }
-    try {
-      await resetPassword(email);
-      setResetSent(true);
-    } catch (err: any) {
-      console.error('Reset password error (raw):', err);
-      setError(mapAuthError(err));
     }
   };
 
@@ -100,13 +83,6 @@ export const Login = () => {
           </div>
         )}
 
-        {resetSent && (
-          <div className="flex items-start gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-xs">
-            <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-            <span>Te enviamos un email con instrucciones para restablecer la contraseña.</span>
-          </div>
-        )}
-
         <button
           type="submit"
           disabled={isSubmitting || !email || !password}
@@ -115,13 +91,9 @@ export const Login = () => {
           {isSubmitting ? 'Accediendo...' : 'Acceder'}
         </button>
 
-        <button
-          type="button"
-          onClick={onResetClick}
-          className="w-full text-xs text-slate-500 hover:text-golive transition-colors"
-        >
-          ¿Olvidaste tu contraseña?
-        </button>
+        <p className="text-center text-[11px] text-slate-400">
+          ¿Olvidaste tu contraseña? Contacta con el administrador del curso.
+        </p>
       </form>
 
       <div className="relative my-8">

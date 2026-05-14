@@ -12,7 +12,8 @@ import {
   CheckSquare,
   Square,
   Save,
-  Mail,
+  KeyRound,
+  X as XIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,7 +23,7 @@ import {
   createUser,
   updateUserCourses,
   updateUserRole,
-  sendPasswordResetEmail,
+  setUserPassword,
   generatePassword,
 } from '../lib/admin-actions';
 import { cn } from '../lib/utils';
@@ -327,8 +328,11 @@ const UserRow = ({ user }: { user: UserProfile }) => {
   const [editing, setEditing] = useState(false);
   const [selectedCourses, setSelectedCourses] = useState<string[]>(user.course_ids || []);
   const [saving, setSaving] = useState(false);
-  const [resetState, setResetState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [resetError, setResetError] = useState<string | null>(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwdValue, setPwdValue] = useState(() => generatePassword());
+  const [pwdSubmitting, setPwdSubmitting] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pwdSuccess, setPwdSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing) setSelectedCourses(user.course_ids || []);
@@ -354,19 +358,44 @@ const UserRow = ({ user }: { user: UserProfile }) => {
     await updateUserRole(user.id, next);
   };
 
-  const sendResetEmail = async () => {
-    if (!confirm(`Enviar email de reset de contraseña a ${user.email}?`)) return;
-    setResetState('sending');
-    setResetError(null);
-    try {
-      await sendPasswordResetEmail(user.email);
-      setResetState('sent');
-      setTimeout(() => setResetState('idle'), 4000);
-    } catch (err: any) {
-      setResetError(err?.message || 'Error');
-      setResetState('error');
-      setTimeout(() => setResetState('idle'), 5000);
+  const openPwd = () => {
+    setPwdValue(generatePassword());
+    setPwdError(null);
+    setPwdSuccess(null);
+    setPwdOpen(true);
+  };
+
+  const closePwd = () => {
+    setPwdOpen(false);
+    setPwdError(null);
+    setPwdSuccess(null);
+  };
+
+  const applyPwd = async () => {
+    setPwdError(null);
+    if (pwdValue.length < 6) {
+      setPwdError('Mínimo 6 caracteres.');
+      return;
     }
+    setPwdSubmitting(true);
+    try {
+      await setUserPassword(user.id, pwdValue);
+      setPwdSuccess(pwdValue);
+    } catch (err: any) {
+      setPwdError(err?.message || 'No se pudo cambiar la contraseña.');
+    } finally {
+      setPwdSubmitting(false);
+    }
+  };
+
+  const copyCreds = () => {
+    if (!pwdSuccess) return;
+    const text =
+      `Acceso a Golive Academy\n` +
+      `URL: ${window.location.origin}/login\n` +
+      `Email: ${user.email}\n` +
+      `Contraseña: ${pwdSuccess}`;
+    navigator.clipboard.writeText(text);
   };
 
   return (
@@ -398,27 +427,96 @@ const UserRow = ({ user }: { user: UserProfile }) => {
             className="text-[10px] text-slate-400 hover:text-golive font-bold uppercase tracking-widest"
             title="Cambiar rol"
           >
-            cambiar
+            cambiar rol
           </button>
           <button
-            onClick={sendResetEmail}
-            disabled={resetState === 'sending'}
-            className={cn(
-              "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md transition-colors",
-              resetState === 'sent' ? "text-green-600 bg-green-50" :
-              resetState === 'error' ? "text-red-600 bg-red-50" :
-              "text-slate-400 hover:text-golive hover:bg-slate-50"
-            )}
-            title={resetError || 'Enviar email para resetear contraseña'}
+            onClick={pwdOpen ? closePwd : openPwd}
+            className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-golive font-bold uppercase tracking-widest px-2 py-1 rounded-md hover:bg-slate-50 transition-colors"
+            title="Cambiar contraseña"
           >
-            <Mail size={10} />
-            {resetState === 'sending' && 'enviando…'}
-            {resetState === 'sent' && 'enviado'}
-            {resetState === 'error' && (resetError?.toLowerCase().includes('rate') ? 'rate limit' : 'error')}
-            {resetState === 'idle' && 'reset pwd'}
+            <KeyRound size={10} /> {pwdOpen ? 'cerrar' : 'cambiar pwd'}
           </button>
         </div>
       </div>
+
+      {pwdOpen && (
+        <div className="mt-4 pt-4 border-t border-slate-50 space-y-3">
+          {!pwdSuccess ? (
+            <>
+              <label className="block">
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Nueva contraseña</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={pwdValue}
+                    onChange={(e) => setPwdValue(e.target.value)}
+                    className="input font-mono tracking-tight"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPwdValue(generatePassword())}
+                    className="px-4 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-600 text-xs font-bold flex items-center gap-2"
+                  >
+                    <RefreshCw size={14} /> Generar
+                  </button>
+                </div>
+              </label>
+
+              {pwdError && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 text-red-600 rounded-xl text-xs">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>{pwdError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={applyPwd}
+                  disabled={pwdSubmitting}
+                  className="flex-1 bg-golive text-white py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
+                >
+                  {pwdSubmitting ? 'Aplicando…' : 'Aplicar contraseña'}
+                </button>
+                <button
+                  onClick={closePwd}
+                  className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl text-xs font-bold flex items-center gap-1"
+                >
+                  <XIcon size={12} /> Cancelar
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="p-4 bg-green-50 border border-green-100 rounded-2xl">
+              <div className="flex items-start gap-2 text-green-700 mb-3">
+                <Check size={16} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-sm">Contraseña actualizada</p>
+                  <p className="text-xs">Pásale al usuario las nuevas credenciales:</p>
+                </div>
+              </div>
+              <pre className="bg-white p-3 rounded-xl text-xs font-mono text-slate-700 whitespace-pre-wrap mb-2">
+{`Email:    ${user.email}
+Contraseña: ${pwdSuccess}`}
+              </pre>
+              <div className="flex gap-2">
+                <button
+                  onClick={copyCreds}
+                  className="flex-1 bg-white text-green-700 border border-green-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Copy size={12} /> Copiar credenciales
+                </button>
+                <button
+                  onClick={closePwd}
+                  className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 pt-4 border-t border-slate-50">
         {!editing ? (

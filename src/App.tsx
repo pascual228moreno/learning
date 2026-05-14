@@ -8,7 +8,6 @@ import { CourseViewer } from './pages/CourseViewer';
 import { Admin } from './pages/Admin';
 import { NoAccess } from './pages/NoAccess';
 import { ChangePassword } from './pages/ChangePassword';
-import { ResetPassword } from './pages/ResetPassword';
 
 export default function App() {
   return (
@@ -23,7 +22,6 @@ export default function App() {
             <Route path="/course/:courseId" element={<CourseViewer />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/account/password" element={<ChangePassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/no-access" element={<NoAccess />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
