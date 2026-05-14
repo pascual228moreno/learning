@@ -314,9 +314,11 @@ const UserRow = ({ user }: { user: UserProfile }) => {
   const [selectedCourses, setSelectedCourses] = useState<string[]>(user.courseIds || []);
   const [saving, setSaving] = useState(false);
 
+  // Sync from props only when not actively editing, otherwise we'd clobber
+  // the admin's in-progress selection every time the parent re-renders.
   useEffect(() => {
-    setSelectedCourses(user.courseIds || []);
-  }, [user.courseIds]);
+    if (!editing) setSelectedCourses(user.courseIds || []);
+  }, [user.courseIds, editing]);
 
   const toggleCourse = (id: string) => {
     setSelectedCourses(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);

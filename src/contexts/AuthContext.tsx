@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
+    let loginStampedForUid: string | null = null;
 
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
@@ -64,6 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setProfile(null);
         setNoAccess(false);
         setLoading(false);
+        loginStampedForUid = null;
         return;
       }
 
@@ -92,7 +94,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      // Subscribe to the user profile. If the doc never appears, mark noAccess.
+      // Stamp lastLoginAt + sync profile picture once per session — NOT on every
+      // snapshot, otherwise we trigger a write→snapshot→write loop.
+      if (loginStampedForUid !== u.uid) {
+        loginStampedForUid = u.uid;
+        setDoc(userRef, {
+          displayName: u.displayName,
+          photoURL: u.photoURL,
+          lastLoginAt: serverTimestamp(),
+        }, { merge: true }).catch(() => { /* non-critical */ });
+      }
+
+      // Subscribe to the user profile (read-only).
       let resolved = false;
       const timer = setTimeout(() => {
         if (!resolved) {
@@ -110,16 +123,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } else {
           setProfile(snap.data() as UserProfile);
           setNoAccess(false);
-          // Update lastLoginAt + displayName/photo opportunistically.
-          setDoc(userRef, {
-            displayName: u.displayName,
-            photoURL: u.photoURL,
-            lastLoginAt: serverTimestamp(),
-          }, { merge: true }).catch(() => { /* non-critical */ });
         }
         setResolvingAccess(false);
       }, () => {
-        // Permission denied or other error: treat as no access.
         resolved = true;
         clearTimeout(timer);
         setProfile(null);
