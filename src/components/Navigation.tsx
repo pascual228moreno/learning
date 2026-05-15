@@ -14,9 +14,15 @@ export const Navigation = () => {
     <>
       <nav className="bg-white border-b border-slate-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-golive rounded flex items-center justify-center text-white font-bold text-xl group-hover:rotate-12 transition-transform">G</div>
-            <span className="font-bold text-xl tracking-tight hidden sm:block">Golive <span className="text-golive">Academy</span></span>
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="/golive-logo.svg"
+              alt="Golive"
+              className="h-7 w-auto group-hover:opacity-80 transition-opacity"
+            />
+            <span className="font-black text-lg tracking-tight hidden sm:block text-golive">
+              Academy
+            </span>
           </Link>
 
           <div className="flex items-center gap-4">
