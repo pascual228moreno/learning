@@ -3,12 +3,12 @@ id: 2
 title: Claude Managed Agents e inicio AG2
 date: Martes 19 mayo · 10:00–12:00
 objectives:
-  - Verificar tier de Anthropic y desbloquear la creacion de agentes
-  - Crear los agentes Researcher, Archivist y Coordinator que dejamos disenados en la sesion 1
+  - Entender las tres capas que componen un agente moderno: connectors, tools y skills
+  - Crear una Skill propia en la consola y disenar su `description` para que el agente la cargue cuando aplique
+  - Crear los agentes Researcher, Archivist y Coordinator usando skills desde el inicio
   - Configurar el Coordinator como orquestador real mediante el script Python
-  - Crear una Skill propia en la consola y asignarla a un agente
-  - Conocer AG2 como framework alternativo a Managed Agents
-  - Ejecutar el primer hello-world de AG2 con dos agentes Claude conversando
+  - Reconstruir el mismo caso en claude.ai como Project, sin codigo
+  - Conocer AG2 como framework alternativo a Managed Agents y ejecutar un primer hello-world
 ---
 
 ## Modulo 1 — Reanudacion y nota sobre tiers de Anthropic
@@ -40,13 +40,126 @@ Entiendes por que la sesion 1 se quedo a medias y como vas a seguir hoy: ejecuta
 
 ---
 
-## Modulo 2 — Crear el agente Researcher
+## Modulo 2 — Las tres capas de un agente: connectors, tools y skills
 
-**Descripcion breve:** Ahora si: creamos el agente investigador que dejamos disenado en la sesion 1.
+**Descripcion breve:** Antes de crear nada hoy, distinguimos los tres conceptos que se confunden con facilidad. Esto marca como vamos a montar el Researcher de forma limpia.
 
 ### Contexto
 
-El system prompt y el YAML completo (version base y version definitiva) los tienes en el modulo 5 de la sesion 1. Aqui ejecutamos la creacion siguiendo el flow de la consola.
+Un agente en Managed Agents combina tres tipos de pieza, y conviene tenerlos separados mentalmente:
+
+#### 1. Connectors / MCP (a nivel de cuenta)
+Lo que configuraste en la sesion 1: `exa` y `zapier` registrados en la consola. Son **fuentes de herramientas externas**. Existen una vez por cuenta y no llaman a nada por si solas. Cualquiera de tus agentes puede usarlos si se los conectas.
+
+#### 2. Tools del agente (a nivel de agente)
+Cuando creas un agente, eliges que connectors atar. A partir de ahi, ese agente concreto **puede llamar** a search Exa o a actions Zapier. El Archivist tendra solo el memory store, asi que no podra llamar a Exa ni a Zapier — son decisiones de alcance por agente.
+
+#### 3. Skills del agente (a nivel de agente, opcional)
+Una skill es **un bloque de instrucciones en Markdown**. No llama a nada. No es un step de un pipeline. Cuando se la asocias al agente, el agente solo ve dos cosas de ella: su `name` y su `description`. El cuerpo entra en su contexto **cuando el agente decide cargarla**, en funcion de la `description`.
+
+### Como conviven en una ejecucion real
+
+Cuando le pides al Researcher "investiga la perovskita y publica en Notion":
+
+1. El agente lee su system prompt (su mision, su workflow)
+2. Decide hacer busquedas → llama a la **tool** de Exa
+3. Recibe resultados, sintetiza el informe
+4. Va a publicar en Notion → ve que tiene una skill cuya `description` dice "aplica cuando vayas a publicar en Notion via Zapier" → **carga el cuerpo** de esa skill como instrucciones extra
+5. Con esas instrucciones, llama a las actions de Zapier siguiendo las reglas (descubrir workspace, evitar tablas, partir paginas largas)
+6. Devuelve el resultado
+
+**La skill no llama a Zapier. El agente llama a Zapier. La skill solo le dice como hacerlo bien.**
+
+### Por que esto cambia como vamos a montar el Researcher
+
+En la sesion 1 disenamos dos versiones del prompt del Researcher:
+- **Version base** — corta, solo identidad + workflow. Asume que el agente "se las apana" con Notion.
+- **Version definitiva** — larga, con todas las reglas operativas de Notion/Zapier dentro.
+
+Hoy vamos a tomar un tercer camino, mas limpio: **prompt version base + las reglas operativas extraidas a una skill independiente**. El resultado funcional es equivalente al prompt definitivo, pero ahora las reglas de Notion viven en un sitio y son reutilizables por cualquier otro agente que las necesite manana.
+
+### Como decide el agente que skill usar
+
+Lo no obvio: **no le dices al agente "usa esta skill ahora"**. Las skills funcionan por auto-descubrimiento. Por eso **la `description` no describe lo que la skill hace, describe cuando aplica**. Compara:
+
+- ❌ Mal: "Reglas para publicar en Notion" (describe el contenido)
+- ✅ Bien: "Aplica cuando vayas a crear paginas en Notion via Zapier — evita errores recurrentes de formato y limites de bloques" (describe el trigger)
+
+Si la `description` esta bien escrita, el agente carga la skill exactamente cuando hace falta. Si esta mal escrita, o el agente la ignora cuando deberia usarla, o la carga sin necesidad y gasta tokens.
+
+### Resultado esperado
+
+Tienes claras las tres capas y sabes por que vamos a crear primero la skill y despues el Researcher con la skill ya atada, en vez de embutir todas las reglas en el prompt.
+
+---
+
+## Modulo 3 — Crear la skill notion-publishing-rules
+
+**Descripcion breve:** Creamos la skill que recoge las reglas operativas de publicar en Notion via Zapier — la asociaremos al Researcher cuando lo creemos en el modulo siguiente.
+
+### Contexto
+
+Estas reglas son las que aparecen en el YAML "version definitiva" del modulo 5 de la sesion 1, integradas dentro del system prompt. Las sacamos de ahi y las dejamos como una skill independiente.
+
+### Pasos
+
+1. En la consola, ve a la seccion de **Skills** dentro de Agents
+2. Crea una skill nueva con estos datos (fijate en la `description` — describe cuando se activa, no que contiene):
+   ```
+   Name:        notion-publishing-rules
+   Description: Aplica cuando vayas a crear o actualizar paginas en Notion via Zapier — evita errores recurrentes de formato, descubre el workspace y respeta el limite de bloques por pagina
+   ```
+3. En el cuerpo de la skill, pega:
+
+```markdown
+## Como publicar en Notion via Zapier sin errores
+
+### Descubrimiento del workspace
+Antes de crear cualquier pagina:
+1. Ejecuta `list_enabled_zapier_actions` con `app="Notion"` para ver las acciones disponibles
+2. Ejecuta `page_by_title` con `exact_match="no"` y `title="a"` para descubrir TODAS las paginas compartidas con la integracion
+3. Anota el ID y titulo de la pagina que usaras como `parent_page`
+4. NO asumas que existen paginas llamadas "Research", "Home" o "Projects" — solo usa paginas confirmadas por busqueda
+
+### Formato del contenido
+- NO uses tablas Markdown (sintaxis |---|). Notion/Zapier no las parsea bien y genera errores de validacion
+- Usa listas con guiones (-) o texto plano
+- Evita caracteres especiales y acentos si puedes
+
+### Limite de bloques por pagina
+- Notion admite maximo 100 bloques por llamada `create_page`
+- Un parrafo, un item de lista o una linea en blanco cuenta como 1 bloque
+- Si el contenido tiene mas de 70 parrafos/items, DIVIDE la publicacion:
+  1. Crea la pagina con titulo y resumen ejecutivo (max. 60 bloques)
+  2. Usa la accion `page_content` para anadir secciones adicionales en llamadas separadas
+
+### Evitar follow-up questions de Zapier
+- Pasa SIEMPRE todos los parametros explicitamente: title, content, parent_page, icon, cover=""
+- Si Zapier pide confirmacion, repite la llamada con los mismos parametros
+```
+
+4. Guarda la skill
+
+### Cuando extraer a Skill y cuando dejar en system prompt
+
+- **Deja en system prompt** lo que define la identidad del agente (su mision, tono, restricciones) y lo que solo aplica a el.
+- **Extrae a Skill** lo que es conocimiento operativo reutilizable: integraciones con herramientas externas, plantillas de output, protocolos de error.
+
+Las reglas de Notion son reutilizables — manana puede que crees otro agente que publique en Notion para otra mision distinta y esta skill le servira tal cual. Por eso van fuera del prompt.
+
+### Resultado esperado
+
+La skill esta creada en la consola. Lista para asociarse al Researcher en el modulo siguiente.
+
+---
+
+## Modulo 4 — Crear el agente Researcher con la skill atada
+
+**Descripcion breve:** Creamos el Researcher con un prompt lean (solo identidad + workflow) y le atamos la skill que creaste en el modulo anterior.
+
+### Contexto
+
+Vamos a usar la **version base** del system prompt del modulo 5 de la sesion 1, no la definitiva. La diferencia es que la base no incluye las reglas de Notion — esas viajan ahora en la skill. El resultado funcional es equivalente al de la version definitiva, pero el prompt es la mitad de largo y las reglas se pueden reutilizar en otros agentes.
 
 ### Pasos
 
@@ -58,54 +171,85 @@ El system prompt y el YAML completo (version base y version definitiva) los tien
    Speed:       standard
    Description: Investigador tecnico para integracion de celdas solares en ceramica
    ```
-3. Pega el system prompt que dejamos definido en el modulo 5 de la sesion 1 (la version base es suficiente para arrancar)
+3. Pega el system prompt **version base** del modulo 5 de la sesion 1:
+
+```
+Eres un agente investigador especializado en materiales fotovoltaicos y ceramica.
+Tu mision es investigar la viabilidad de integrar celdas de perovskita en sustratos ceramicos.
+
+Cuando recibas una tarea:
+1. Busca informacion tecnica, comercial y de mercado usando las herramientas disponibles.
+2. Prioriza fuentes academicas y tecnicas sobre blogs o redes sociales.
+3. Genera un informe estructurado con:
+   - Resumen ejecutivo
+   - Estado del arte tecnico
+   - Players comerciales relevantes
+   - Estimacion de costes
+   - Riesgos principales
+4. Publica el informe en Notion usando Zapier.
+5. Si encuentras errores durante la ejecucion, reportalos al final de tu respuesta.
+```
+
+Fijate que el paso 4 solo dice "Publica el informe en Notion usando Zapier" — el **como** vive en la skill.
+
 4. En **Tools / Connections**:
    - Marca **exa** y **zapier**
-   - Activa el **agent toolset** (es lo que permitira que el Coordinator lo invoque despues)
-5. **Save** y copia el ID del agente — apuntalo en la tabla que cierra el modulo 5
+   - Activa el **agent toolset** (permitira que el Coordinator lo invoque despues)
+
+5. En **Skills** del agente, asocia la skill `notion-publishing-rules` que creaste en el modulo 3
+
+6. **Save** y copia el ID del agente — apuntalo en la tabla que aparece al final del modulo 7
 
 ### Resultado esperado
 
-El Researcher esta creado y aparece listado en Agents. Tienes su ID anotado.
+El Researcher esta creado con un prompt lean + skill atada. Tienes su ID anotado.
 
 ---
 
-## Modulo 3 — Probar el Researcher en solitario
+## Modulo 5 — Probar el Researcher y verificar que la skill se carga
 
-**Descripcion breve:** Antes de conectar los tres agentes, lanzamos al Researcher con una consulta real y observamos como trabaja.
+**Descripcion breve:** Lanzamos al Researcher con una consulta real y comprobamos que carga la skill cuando le toca publicar en Notion.
 
 ### Contexto
 
-Probar cada agente aislado antes de orquestarlo es la regla basica para no perderse en errores cruzados. Si el Researcher no publica bien en Notion en solitario, no va a hacerlo mejor desde un pipeline coordinado.
+Esta es la prueba de fuego de la `description` de la skill. Si esta bien escrita, el agente la carga cuando intenta publicar en Notion. Si no la carga, hay que mejorar la `description`.
 
 ### Pasos
 
 1. Abre el agente Researcher
-2. Inicia una nueva sesion y lanza esta consulta:
+2. Inicia una nueva sesion y lanza:
    ```
    Investiga el estado del arte de la integracion de celdas de perovskita
    en sustratos ceramicos para el sector de pavimentos. Foco en los ultimos 18 meses.
    ```
-3. Observa la traza mientras trabaja:
+3. Observa la traza con atencion:
    - Lanza busquedas con Exa?
    - Estructura el informe con las secciones definidas?
-   - Intenta publicar en Notion via Zapier?
-   - Reporta incidencias al final?
-4. Si hay errores con Zapier o Notion (lo normal en la primera vuelta), anotalos literales — los reciclamos en el modulo de Skills
+   - Cuando empieza la fase de publicacion en Notion, **carga la skill `notion-publishing-rules`**? Suele aparecer un evento tipo "skill loaded" en la traza
+   - Sigue los pasos de la skill: descubrir workspace, evitar tablas, partir paginas si es largo?
+
+### Si la skill NO se carga cuando deberia
+
+Vuelve a la skill y reescribe su `description`. Aclara explicitamente cuando aplica. Ejemplo de iteracion:
+
+- Inicial: "Aplica cuando vayas a crear paginas en Notion via Zapier"
+- Mejor: "Aplica siempre que el agente vaya a llamar a una accion de Zapier sobre Notion (crear pagina, actualizar contenido, anadir bloques) — define el protocolo correcto para evitar errores de validacion"
+
+Vuelve a lanzar al Researcher y verifica.
 
 ### Resultado esperado
 
-Tienes un primer informe en Notion (aunque sea con errores) o, al menos, la traza completa de lo que ha intentado el Researcher. Las incidencias anotadas se reutilizan en el modulo 9.
+El Researcher publica en Notion siguiendo las reglas de la skill, o iteras la `description` hasta que lo haga. Has visto en vivo el ciclo de feedback que define el trabajo con skills.
 
 ---
 
-## Modulo 4 — Crear el agente Archivist
+## Modulo 6 — Crear el agente Archivist
 
 **Descripcion breve:** Creamos el agente que solo archiva: sin internet, solo memoria.
 
 ### Contexto
 
-El system prompt y los YAML estan en el modulo 7 de la sesion 1. Aqui solo ejecutamos la creacion.
+El system prompt y los YAML estan en el modulo 7 de la sesion 1. Aqui solo ejecutamos la creacion. El Archivist no necesita skills hoy — su funcion es lo bastante acotada como para vivir entera en su system prompt. Si manana aparece comportamiento reutilizable (por ejemplo, "como deduplicar entradas en el memory store"), entonces lo extraeriamos a una skill.
 
 ### Pasos
 
@@ -130,7 +274,7 @@ El Archivist esta creado, sin acceso a internet, con acceso al almacen de memori
 
 ---
 
-## Modulo 5 — Crear el agente Coordinator
+## Modulo 7 — Crear el agente Coordinator
 
 **Descripcion breve:** Creamos el cerebro del pipeline.
 
@@ -155,20 +299,21 @@ El system prompt y el YAML estan en el modulo 8 de la sesion 1. Recuerda: aunque
 
 ### Tabla de IDs — completala antes de seguir
 
-| Agente o recurso   | ID |
-|--------------------|----|
-| Researcher         |    |
-| Archivist          |    |
-| Coordinator        |    |
-| Almacen de memoria |    |
+| Agente o recurso          | ID |
+|---------------------------|----|
+| Skill notion-publishing-rules |   |
+| Researcher                |    |
+| Archivist                 |    |
+| Coordinator               |    |
+| Almacen de memoria        |    |
 
 ### Resultado esperado
 
-Los tres agentes existen y tienes los cuatro IDs anotados en la tabla.
+Los tres agentes existen y tienes anotados los IDs de skill, agentes y memory store.
 
 ---
 
-## Modulo 6 — Configurar el Coordinator como orquestador
+## Modulo 8 — Configurar el Coordinator como orquestador
 
 **Descripcion breve:** Ejecutamos el script Python que registra al Coordinator como orquestador real de los otros dos agentes.
 
@@ -232,9 +377,9 @@ El Coordinator ahora es un orquestador real. La proxima vez que lo abras en la c
 
 ---
 
-## Modulo 7 — Probar el pipeline coordinado
+## Modulo 9 — Probar el pipeline coordinado
 
-**Descripcion breve:** Lanzamos la misma consulta del modulo 3 pero ahora desde el Coordinator, y verificamos que los tres agentes trabajan como un equipo.
+**Descripcion breve:** Lanzamos la misma consulta del modulo 5 pero ahora desde el Coordinator, y verificamos que los tres agentes trabajan como un equipo.
 
 ### Contexto
 
@@ -251,109 +396,14 @@ Si el modulo anterior funciono, el Coordinator delega trabajo en lugar de respon
    ```
 3. Observa la traza:
    - El Coordinator delega al Researcher?
-   - Espera al resultado y lo pasa al Archivist?
+   - El Researcher carga la skill `notion-publishing-rules` cuando le toca publicar?
+   - El Coordinator espera al resultado y lo pasa al Archivist?
    - El Archivist confirma que ha guardado en `/perovskitas/...`?
 4. Si alguna parte falla, lee el output completo y anota la incidencia
 
 ### Resultado esperado
 
-El pipeline funciona end-to-end: Coordinator delega → Researcher investiga y publica en Notion → Archivist guarda en memoria. Acabas de construir tu primer sistema multi-agente real en Managed Agents.
-
----
-
-## Modulo 8 — Skills en la consola: que son y cuando usarlas
-
-**Descripcion breve:** Una Skill es un bloque de instrucciones reutilizable que puedes asignar a varios agentes. Aprende cuando merece la pena extraer comportamiento a una Skill.
-
-### Contexto
-
-Hasta ahora todo el comportamiento de un agente vive dentro de su system prompt. Funciona para empezar pero genera dos problemas:
-
-1. **Duplicacion** — si tres agentes necesitan saber "como publicar en Notion sin que Zapier falle", repites el mismo bloque en tres prompts distintos.
-2. **Mantenimiento** — cada vez que descubres una regla operativa nueva (como las que aparecen en el YAML "version definitiva" del modulo 5 de la sesion 1), tienes que actualizar varios sitios.
-
-Las Skills resuelven esto: extraes ese bloque de comportamiento a un objeto independiente, lo nombras, lo versionas, y lo asignas a los agentes que lo necesiten. Es el mismo patron que cualquier sistema de modulos en programacion.
-
-Una Skill tipica en la consola de Anthropic contiene:
-- Un nombre y descripcion
-- Un cuerpo de instrucciones en Markdown que el agente carga cuando detecta que la skill es relevante
-- Opcionalmente, ficheros de referencia o scripts auxiliares
-
-### Como decide el agente que skill usar
-
-Lo no obvio: **no le dices al agente "usa esta skill ahora"**. Las skills funcionan por auto-descubrimiento. Cuando asocias una skill a un agente, el agente ve solo dos cosas de cada skill: su `name` y su `description`. El cuerpo de la skill no entra en el contexto hasta que el agente decide cargarlo.
-
-Esto cambia la regla mas importante a la hora de disenar una skill: **la `description` no describe lo que la skill hace, describe cuando aplica**. Compara:
-
-- ❌ Mal: "Reglas para publicar en Notion" (describe el contenido)
-- ✅ Bien: "Aplica cuando vayas a crear paginas en Notion via Zapier — evita errores recurrentes de formato y limites de bloques" (describe el trigger)
-
-Si la `description` esta bien escrita, el agente carga la skill exactamente cuando hace falta. Si esta mal escrita, o el agente la ignora cuando deberia usarla, o la carga sin necesidad y gasta tokens.
-
-### Cuando extraer a Skill y cuando dejar en system prompt
-
-- **Deja en system prompt** lo que define la identidad del agente (su mision, tono, restricciones) y lo que solo aplica a el.
-- **Extrae a Skill** lo que es conocimiento operativo reutilizable: integraciones con herramientas externas, plantillas de output, protocolos de error.
-
-### Resultado esperado
-
-Tienes claro que una Skill encapsula un trozo de comportamiento reutilizable y que la decision de extraer depende de si ese conocimiento se va a usar en varios agentes o evolucionar de forma independiente.
-
----
-
-## Modulo 9 — Crear una Skill propia y asignarla al Researcher
-
-**Descripcion breve:** Convertimos las reglas operativas de "publicar en Notion sin que Zapier falle" en una Skill independiente.
-
-### Contexto
-
-En el modulo 3 anotaste las incidencias del Researcher con Zapier/Notion. Algunas de esas reglas son justo las que aparecen en el YAML "version definitiva" del modulo 5 de la sesion 1: no usar tablas Markdown, partir paginas largas en multiples llamadas, descubrir el workspace antes de crear paginas. Las extraemos a una Skill que pueda usar cualquier agente que publique en Notion.
-
-### Pasos
-
-1. En la consola, ve a la seccion de **Skills** dentro de Agents
-2. Crea una skill nueva con estos datos (fijate en la `description` — aplica lo del modulo 8: describe cuando se activa, no que contiene):
-   ```
-   Name:        notion-publishing-rules
-   Description: Aplica cuando vayas a crear o actualizar paginas en Notion via Zapier — evita errores recurrentes de formato, descubre el workspace y respeta el limite de bloques por pagina
-   ```
-3. En el cuerpo de la skill, pega:
-
-```markdown
-## Como publicar en Notion via Zapier sin errores
-
-### Descubrimiento del workspace
-Antes de crear cualquier pagina:
-1. Ejecuta `list_enabled_zapier_actions` con `app="Notion"` para ver las acciones disponibles
-2. Ejecuta `page_by_title` con `exact_match="no"` y `title="a"` para descubrir TODAS las paginas compartidas con la integracion
-3. Anota el ID y titulo de la pagina que usaras como `parent_page`
-4. NO asumas que existen paginas llamadas "Research", "Home" o "Projects" — solo usa paginas confirmadas por busqueda
-
-### Formato del contenido
-- NO uses tablas Markdown (sintaxis |---|). Notion/Zapier no las parsea bien y genera errores de validacion
-- Usa listas con guiones (-) o texto plano
-- Evita caracteres especiales y acentos si puedes
-
-### Limite de bloques por pagina
-- Notion admite maximo 100 bloques por llamada `create_page`
-- Un parrafo, un item de lista o una linea en blanco cuenta como 1 bloque
-- Si el contenido tiene mas de 70 parrafos/items, DIVIDE la publicacion:
-  1. Crea la pagina con titulo y resumen ejecutivo (max. 60 bloques)
-  2. Usa la accion `page_content` para anadir secciones adicionales en llamadas separadas
-
-### Evitar follow-up questions de Zapier
-- Pasa SIEMPRE todos los parametros explicitamente: title, content, parent_page, icon, cover=""
-- Si Zapier pide confirmacion, repite la llamada con los mismos parametros
-```
-
-4. Guarda la skill
-5. Vuelve al agente Researcher → editar → en la seccion de Skills asociadas, asigna `notion-publishing-rules`
-6. Guarda el agente
-7. Lanza una consulta nueva al Researcher y verifica que la traza incluye ahora las verificaciones del workspace antes de crear la pagina
-
-### Resultado esperado
-
-La skill esta creada y el Researcher la usa. Si en una sesion futura creas otro agente que tambien publique en Notion, le asignas la misma skill sin reescribir nada.
+El pipeline funciona end-to-end: Coordinator delega → Researcher investiga + carga skill + publica en Notion → Archivist guarda en memoria. Acabas de construir tu primer sistema multi-agente real en Managed Agents, con skills bien factorizadas.
 
 ---
 
@@ -406,13 +456,13 @@ Vamos a crear un Project en claude.ai que englobe la mision de investigacion de 
    Name:        Perovskita en ceramica
    Description: Investigacion y seguimiento de la integracion de celdas de perovskita en sustratos ceramicos
    ```
-3. En el campo de **Custom instructions** (system prompt del Project) pega una version simplificada del prompt del Researcher (el del modulo 5 de la sesion 1 sirve como base). La parte de "publica en Notion via Zapier" sobra aqui — en este flow el usuario humano decide cuando copiar el resultado a Notion.
+3. En el campo de **Custom instructions** (system prompt del Project) pega una version simplificada del prompt del Researcher (el del modulo 4 de esta sesion sirve como base). La parte de "publica en Notion via Zapier" sobra aqui — en este flow el usuario humano decide cuando copiar el resultado a Notion.
 4. Sube como **knowledge files** los documentos que tengas del proyecto: informes previos, datos de costes, articulos de referencia, especificaciones tecnicas. Es lo que en el pipeline multi-agente vivia en el almacen de memoria, pero ahora es estatico (lo subes tu).
 5. Asocia al Project las skills que apliquen. Algunas observaciones:
-   - La `notion-publishing-rules` que creaste en el modulo 9 puede no aplicar aqui si vas a copiar manualmente el output a Notion
+   - La `notion-publishing-rules` puede no aplicar aqui si vas a copiar manualmente el output a Notion
    - Si tienes (o creas) una skill de "formato de informe estructurado" o "criterios de evaluacion de fuentes", esas si encajan
    - Segun la version de claude.ai, las Skills se asocian al Project desde su panel propio o estan disponibles a nivel de cuenta. El profesor ensena en directo donde aparece hoy
-6. Abre una conversacion nueva en el Project y lanza la misma consulta de los modulos 3 y 7:
+6. Abre una conversacion nueva en el Project y lanza la misma consulta de los modulos 5 y 9:
    ```
    Investiga el estado del arte de la integracion de celdas de perovskita
    en sustratos ceramicos para el sector de pavimentos. Foco en los ultimos
@@ -425,7 +475,7 @@ Vamos a crear un Project en claude.ai que englobe la mision de investigacion de 
 
 ### Comparativa rapida con lo que has hecho antes
 
-| Aspecto              | Multi-agent (modulos 1-7)              | Project en claude.ai (este modulo)        |
+| Aspecto              | Multi-agent (modulos 1-9)              | Project en claude.ai (este modulo)        |
 |----------------------|----------------------------------------|-------------------------------------------|
 | Setup                | Consola dev + script Python            | UI de claude.ai, cero codigo              |
 | Orquestacion         | Coordinator delega a 2 subagentes      | No hay — un solo asistente                |
@@ -555,9 +605,11 @@ Has visto que AG2 funciona y que puedes orquestar agentes Claude desde Python en
 
 En esta sesion hemos:
 - Recapitulado por que la sesion 1 se quedo a medias (tiers de Anthropic)
-- Creado los tres agentes y configurado el Coordinator como orquestador via script Python
-- Visto en vivo un pipeline multi-agente trabajando de forma coordinada
-- Aprendido a extraer comportamiento reutilizable a Skills y como el agente decide cuando usarlas
+- Distinguido las tres capas: connectors, tools y skills
+- Creado una skill independiente y aprendido a disenar su `description` para auto-discovery
+- Creado los tres agentes con prompts lean y la skill atada desde el primer momento
+- Configurado el Coordinator como orquestador via script Python
+- Visto en vivo un pipeline multi-agente coordinado, con skills cargandose cuando aplican
 - Reconstruido el mismo caso en claude.ai como Project, sin codigo ni consola dev
 - Abierto la puerta a AG2 como framework alternativo
 
