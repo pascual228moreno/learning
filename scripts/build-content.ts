@@ -80,8 +80,10 @@ function stripModuleLabel(title: string): string {
 function parseModules(sessionId: number, body: string): Step[] {
   const lines = body.split('\n');
   const moduleHeaderIdx: number[] = [];
+  let inFence = false;
   for (let i = 0; i < lines.length; i++) {
-    if (/^##\s+/.test(lines[i])) moduleHeaderIdx.push(i);
+    if (/^```/.test(lines[i])) inFence = !inFence;
+    if (!inFence && /^##\s+/.test(lines[i])) moduleHeaderIdx.push(i);
   }
 
   const steps: Step[] = [];
