@@ -1,5 +1,5 @@
 ---
 id: 4
-title: ChatGPT Workspace Agents
+title: Frameworks de agentes IA con Claude Code
 date: Martes 26 mayo
 ---
