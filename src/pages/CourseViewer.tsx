@@ -13,6 +13,7 @@ import {
   Download,
   Sparkles,
   Paperclip,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -308,7 +309,8 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
                     isDone ? "border-slate-100 bg-slate-50/40" : "border-slate-100 shadow-sm hover:border-golive/20"
                   )}
                 >
-                  <div className="p-6 flex items-start gap-5 cursor-pointer" onClick={() => toggleStep(step.id)}>
+                  {/* Header clickable — solo esta zona abre/cierra */}
+                  <div className="p-6 flex items-start gap-5 cursor-pointer select-none" onClick={() => toggleStep(step.id)}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -338,28 +340,37 @@ const SessionView = ({ course, session, completedSteps }: { course: Course, sess
                           : (step.description.length > 80 ? step.description.substring(0, 80) + '…' : step.description)
                         }
                       </p>
-
-                      {isOpen && step.content && (
-                        <div className="mt-6">
-                          <MarkdownContent source={step.content} />
-                        </div>
-                      )}
-
-                      {isOpen && step.resources && step.resources.length > 0 && (
-                        <div className="mt-6 flex flex-wrap gap-2">
-                          {step.resources.map((res, i) => (
-                            <a
-                              key={i}
-                              href={res.url}
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-golive hover:border-golive transition-all shadow-sm"
-                            >
-                              <Download size={14} /> {res.title}
-                            </a>
-                          ))}
-                        </div>
-                      )}
                     </div>
+
+                    <ChevronDown
+                      size={20}
+                      className={cn(
+                        "flex-shrink-0 mt-1 text-slate-400 transition-transform duration-300",
+                        isOpen && "rotate-180"
+                      )}
+                    />
                   </div>
+
+                  {/* Contenido expandido — FUERA del div clickable, no colapsa al hacer click */}
+                  {isOpen && step.content && (
+                    <div className="px-6 pb-6 pl-[76px]">
+                      <MarkdownContent source={step.content} />
+                    </div>
+                  )}
+
+                  {isOpen && step.resources && step.resources.length > 0 && (
+                    <div className="px-6 pb-6 pl-[76px] flex flex-wrap gap-2">
+                      {step.resources.map((res, i) => (
+                        <a
+                          key={i}
+                          href={res.url}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-golive hover:border-golive transition-all shadow-sm"
+                        >
+                          <Download size={14} /> {res.title}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             }) : (
